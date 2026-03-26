@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>無障礙內文潤飾工具</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+
+    .logo h1 { font-size: 1.1rem; font-weight: 700; }
+    .logo p  { font-size: .72rem; color: var(--muted); margin-top: 1px; }
+
+    .level-toggle {
+      display: flex;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .level-toggle button {
+      padding: 6px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .level-toggle button.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(37,99,235,.35);
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      min-height: 520px;
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-head h2 {
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .panel-actions { display: flex; gap: 6px; }
+
+    .btn-sm {
+      padding: 5px 11px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: .78rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-sm:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Textarea ── */
+    #input {
+      flex: 1;
+      border: none;
+      outline: none;
+      padding: 16px;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: .8rem;
+      line-height: 1.65;
+      resize: none;
+      color: var(--text);
+    }
+    #input::placeholder { color: #cbd5e1; }
+
+    .panel-foot {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .char-count { font-size: .74rem; color: var(--muted); }
+
+    #btn-submit {
+      padding: 9px 22px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: background .15s;
+    }
+    #btn-submit:hover:not(:disabled) { background: var(--primary-dark); }
+    #btn-submit:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    /* Ctrl+Enter hint */
+    .shortcut-hint {
+      font-size: .7rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    kbd {
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: .7rem;
+      font-family: inherit;
+    }
+
+    /* ── Output ── */
+    #output {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+    }
+    #output pre {
+      margin: 0;
+      min-height: 100%;
+    }
+    #output pre code {
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: .8rem;
+      line-height: 1.65;
+      border-radius: 0 !important;
+    }
+
+    .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 400px;
+      gap: 12px;
+      color: #cbd5e1;
+      text-align: center;
+      padding: 40px;
+      font-size: .9rem;
+    }
+
+    /* ── Loading ── */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      gap: 14px;
+      color: var(--muted);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Report ── */
+    .report {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .report-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .report-head h2 {
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .report-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+    .stat {
+      font-size: .78rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .stat-fix     { background: #dcfce7; color: var(--success); }
+    .stat-clean   { background: #dbeafe; color: var(--primary); }
+    .stat-warning { background: #fef3c7; color: var(--warning); }
+
+    .report-body {
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+    .change-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: .875rem;
+    }
+    .change-item.fix     { background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .change-item.clean   { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .change-item.warning { background: #fffbeb; border: 1px solid #fde68a; }
+    .change-icon { flex-shrink: 0; line-height: 1.5; }
+    .change-desc { line-height: 1.55; }
+    .change-wcag { font-size: .73rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Error ── */
+    .error-box {
+      margin: 16px;
+      padding: 14px 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: var(--danger);
+      font-size: .875rem;
+      line-height: 1.5;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: .875rem;
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Responsive ── */
+    @media (max-width: 800px) {
+      .panels { grid-template-columns: 1fr; }
+      main { padding: 16px; }
+      .shortcut-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Header ══ -->
+<header>
+  <div class="logo">
+    <h1>無障礙內文潤飾工具</h1>
+    <p>WCAG 2.1 自動清理與修復</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <label style="font-size:.78rem;color:var(--muted);white-space:nowrap;">頁面現有標題</label>
+      <select id="existing-headings" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:#fff;color:var(--text);cursor:pointer;">
+        <option value="none">無</option>
+        <option value="h1">已有 h1</option>
+        <option value="h1h2" selected>已有 h1 + h2</option>
+        <option value="h1h2h3">已有 h1 + h2 + h3</option>
+      </select>
+    </div>
+    <div class="level-toggle">
+      <button id="btn-aa"  onclick="setLevel('AA')"  class="active">AA</button>
+      <button id="btn-aaa" onclick="setLevel('AAA')">AAA</button>
+    </div>
+  </div>
+</header>
+
+<!-- ══ Main ══ -->
+<main>
+  <div class="panels">
+
+    <!-- 輸入 -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>輸入內容</h2>
+        <div class="panel-actions">
+          <button class="btn-sm" onclick="clearInput()">清除</button>
+        </div>
+      </div>
+      <textarea id="input"
+        placeholder="貼上 HTML 原始碼，或從 Word / Google Docs 複製的內容..."
+        oninput="updateCount()"></textarea>
+      <div class="panel-foot">
+        <span class="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 送出</span>
+        <span class="char-count" id="char-count">0 字元</span>
+        <button id="btn-submit" onclick="run()">
+          <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+              d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          開始修復
+        </button>
+      </div>
+    </div>
+
+    <!-- 輸出 -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>修復結果</h2>
+        <div class="panel-actions">
+          <button class="btn-sm" id="btn-reuse"    onclick="reuse()"    style="display:none">← 送回輸入</button>
+          <button class="btn-sm" id="btn-copy"     onclick="copyHTML()" style="display:none">複製</button>
+          <button class="btn-sm" id="btn-download" onclick="download()" style="display:none">下載 .html</button>
+        </div>
+      </div>
+      <div id="output">
+        <div class="placeholder">
+          <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
+                 a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/>
+          </svg>
+          修復後的 HTML 將顯示在這裡
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改報告 -->
+  <div class="report" id="report" style="display:none">
+    <div class="report-head">
+      <h2>修改報告</h2>
+      <div class="report-stats" id="report-stats"></div>
+    </div>
+    <div class="report-body" id="report-body"></div>
+  </div>
+</main>
+
+<div id="toast">已複製到剪貼簿</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+// ════════════════════════════════════════════
+//  設定區：部署 Cloudflare Worker 後填入網址
+// ════════════════════════════════════════════
+const WORKER_URL = 'https://weathered-boat-76be.love520297.workers.dev';
+// ════════════════════════════════════════════
+
+let level = 'AA';
+let lastOutput = '';
+
+function getHeadingInstruction() {
+  const v = document.getElementById('existing-headings').value;
+  const map = {
+    none:   '標題層級無限制，修正時確保不跳層即可。',
+    h1:     '頁面已有 h1，內容中最高標題只能使用 h2，不可出現 h1。',
+    h1h2:   '頁面已有 h1 和 h2，內容中最高標題只能使用 h3，不可出現 h1 或 h2。',
+    h1h2h3: '頁面已有 h1、h2、h3，內容中最高標題只能使用 h4，不可出現 h1、h2 或 h3。'
+  };
+  return map[v];
+}
+
+function setLevel(v) {
+  level = v;
+  document.getElementById('btn-aa').classList.toggle('active',  v === 'AA');
+  document.getElementById('btn-aaa').classList.toggle('active', v === 'AAA');
+}
+
+function clearInput() {
+  document.getElementById('input').value = '';
+  updateCount();
+}
+
+function updateCount() {
+  const n = document.getElementById('input').value.length;
+  document.getElementById('char-count').textContent = n.toLocaleString() + ' 字元';
+}
+
+function reuse() {
+  document.getElementById('input').value = lastOutput;
+  updateCount();
+  resetOutput();
+}
+
+function resetOutput() {
+  lastOutput = '';
+  document.getElementById('output').innerHTML = `
+    <div class="placeholder">
+      <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
+             a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/>
+      </svg>
+      修復後的 HTML 將顯示在這裡
+    </div>`;
+  ['btn-copy','btn-download','btn-reuse'].forEach(id =>
+    document.getElementById(id).style.display = 'none');
+  document.getElementById('report').style.display = 'none';
+}
+
+function copyHTML() {
+  navigator.clipboard.writeText(lastOutput).then(() => showToast('已複製到剪貼簿'));
+}
+
+function download() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lastOutput], { type: 'text/html' }));
+  a.download = 'accessible.html';
+  a.click();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── 主流程 ──
+async function run() {
+  const input = document.getElementById('input').value.trim();
+  if (!input) { showToast('請先貼上內容'); return; }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner" style="width:15px;height:15px;border-width:2px;margin:0"></div> 處理中...`;
+
+  document.getElementById('output').innerHTML =
+    `<div class="loading"><div class="spinner"></div><p>正在分析並修復...</p></div>`;
+  document.getElementById('report').style.display = 'none';
+  ['btn-copy','btn-download','btn-reuse'].forEach(id =>
+    document.getElementById(id).style.display = 'none');
+
+  const systemPrompt = `你是一位專業的 HTML 無障礙工程師。請清理並修復以下 HTML，使其符合 WCAG 2.1 ${level} 標準。
+
+【第一步：清理垃圾內容】
+1. 移除 Microsoft Word 貼上殘留：mso-* 屬性、<o:p> 標籤、<!--[if ...]> 條件式註解、xml namespace 宣告
+2. 移除 Google Docs 殘留：docs-internal-guid-* 屬性/class、多餘的空 <span>
+3. 移除空白標籤：內容為空或只含空白/&nbsp; 的 <p>、<span>、<div>
+4. 清理連續 <br>：超過 2 個連續 <br> 只保留 1 個
+5. 移除排版用的 &nbsp; 濫用（段落開頭空格等）
+6. 移除無意義 inline style：font-family、font-size、color、background-color、mso-* 等
+7. 移除無語意 class：MsoNormal、MsoListParagraph、MsoBodyText 等 Word class
+
+【第二步：無障礙修復（WCAG 2.1 ${level}）】
+1. 標題層級規則：${getHeadingInstruction()} 只調整已存在的標題標籤（h1~h6），不可將 <p> 升級為標題，保留原始內容的語意結構。
+2. <img> 缺少 alt 屬性時補上 alt=""（在 changes 中標記需人工填寫有意義的描述）
+3. <table> 補上 <th scope="col"> 欄標題或 <th scope="row"> 列標題
+4. 將 tabindex 大於 0 的值移除或改為 0
+5. 確保 <button> 有可見文字，若無則加上 aria-label
+6. <a> 的連結文字若為「點此」「更多」「click here」等無描述文字，在 changes 中標記需人工修改
+
+請只回傳以下 JSON 格式，不要加任何說明文字：
+{
+  "html": "修復後的完整 HTML",
+  "changes": [
+    { "type": "clean", "description": "說明清理了什麼" },
+    { "type": "fix",   "description": "說明修復了什麼", "wcag": "WCAG 條款編號" },
+    { "type": "warning", "description": "需人工確認的項目" }
+  ]
+}`;
+
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: input }]
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(`錯誤 ${res.status}：${JSON.stringify(errBody)}`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    const text = data.content?.[0]?.text;
+    if (!text) throw new Error('回應內容為空，請重試');
+
+    // 解析 JSON（容忍 Claude 偶爾加多餘文字）
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('回應格式異常，請重試');
+    const result = JSON.parse(jsonMatch[0]);
+
+    lastOutput = result.html || '';
+
+    // 語法高亮顯示
+    const escaped = lastOutput
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    document.getElementById('output').innerHTML =
+      `<pre><code class="language-html">${escaped}</code></pre>`;
+    hljs.highlightAll();
+
+    // 顯示操作按鈕
+    ['btn-copy','btn-download','btn-reuse'].forEach(id =>
+      document.getElementById(id).style.display = 'inline-flex');
+
+    // 建立報告
+    buildReport(result.changes || []);
+
+  } catch (err) {
+    document.getElementById('output').innerHTML =
+      `<div class="error-box">❌ ${err.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+  </svg> 開始修復`;
+}
+
+function buildReport(changes) {
+  const counts = {};
+  changes.forEach(c => { counts[c.type] = (counts[c.type] || 0) + 1; });
+
+  const statsEl = document.getElementById('report-stats');
+  statsEl.innerHTML = [
+    counts.fix     ? `<span class="stat stat-fix">✅ 修復 ${counts.fix} 項</span>` : '',
+    counts.clean   ? `<span class="stat stat-clean">🧹 清理 ${counts.clean} 項</span>` : '',
+    counts.warning ? `<span class="stat stat-warning">⚠️ 待確認 ${counts.warning} 項</span>` : ''
+  ].join('');
+
+  const icon = { fix: '✅', clean: '🧹', warning: '⚠️' };
+  document.getElementById('report-body').innerHTML = changes.map(c => `
+    <div class="change-item ${c.type}">
+      <span class="change-icon">${icon[c.type] || '•'}</span>
+      <div>
+        <div class="change-desc">${c.description}</div>
+        ${c.wcag ? `<div class="change-wcag">WCAG ${c.wcag}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  document.getElementById('report').style.display = 'block';
+}
+
+// Ctrl / Cmd + Enter 快捷鍵
+document.getElementById('input').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run();
+});
+</script>
+</body>
+</html>
