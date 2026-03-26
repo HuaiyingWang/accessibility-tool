@@ -523,11 +523,12 @@ async function run() {
 
 【第二步：無障礙修復（WCAG 2.1 ${level}）】
 1. 標題層級規則：${getHeadingInstruction()} 只調整已存在的標題標籤（h1~h6），不可將 <p> 升級為標題，保留原始內容的語意結構。
-2. <img> 缺少 alt 屬性時補上 alt=""（在 changes 中標記需人工填寫有意義的描述）
-3. <table> 補上 <th scope="col"> 欄標題或 <th scope="row"> 列標題
-4. 將 tabindex 大於 0 的值移除或改為 0
-5. 確保 <button> 有可見文字，若無則加上 aria-label
-6. <a> 的連結文字若為「點此」「更多」「click here」等無描述文字，在 changes 中標記需人工修改
+2. <img> 缺少 alt 屬性時，根據以下優先順序推測並填入 alt 文字：①圖片周圍的標題、說明文字、段落內容；②圖片的 src 檔名（去除副檔名、將連字號/底線轉為空格）；③若無法推測則填 alt="圖片"。每張圖片在 changes 中以 warning 列出推測結果，標記需人工確認是否正確。
+3. <iframe> 缺少 title 屬性時，根據以下優先順序推測並填入 title：①iframe 周圍的標題或說明文字；②src URL 中可辨識的關鍵字；③若為 YouTube 則填 title="YouTube 影片"，其他來源則填 title="內嵌影片"。在 changes 中以 warning 標記需人工確認。
+4. <table> 補上 <th scope="col"> 欄標題或 <th scope="row"> 列標題
+5. 將 tabindex 大於 0 的值移除或改為 0
+6. 確保 <button> 有可見文字，若無則加上 aria-label
+7. <a> 的連結文字若為「點此」「更多」「click here」等無描述文字，在 changes 中標記需人工修改
 
 請只回傳以下 JSON 格式，不要加任何說明文字：
 {
