@@ -511,7 +511,7 @@ async function run() {
   ['btn-copy','btn-download','btn-reuse'].forEach(id =>
     document.getElementById(id).style.display = 'none');
 
-  const systemPrompt = `你是一位專業的 HTML 無障礙工程師。請清理並修復以下 HTML，使其符合 WCAG 2.1 ${level} 標準。
+  const systemPrompt = `你是一位專業的 HTML/CSS 無障礙工程師。請清理並修復以下 HTML 與 CSS，使其符合 WCAG 2.1 ${level} 標準。
 
 【第一步：清理垃圾內容】
 1. 移除 Microsoft Word 貼上殘留：mso-* 屬性、<o:p> 標籤、<!--[if ...]> 條件式註解、xml namespace 宣告
@@ -519,10 +519,13 @@ async function run() {
 3. 移除空白標籤：內容為空或只含空白/&nbsp; 的 <p>、<span>、<div>
 4. 清理連續 <br>：超過 2 個連續 <br> 只保留 1 個
 5. 移除排版用的 &nbsp; 濫用（段落開頭空格等）
-6. 移除無意義 inline style：font-family、font-size、color、background-color、mso-* 等
-7. 移除無語意 class：MsoNormal、MsoListParagraph、MsoBodyText 等 Word class
+6. 移除無語意 class：MsoNormal、MsoListParagraph、MsoBodyText 等 Word class
 
-【第二步：無障礙修復（WCAG 2.1 ${level}）】
+【第二步：樣式處理（包含 HTML 內的 style 屬性與獨立的 <style> 標籤）】
+1. 針對獨立的 <style> 標籤：必須完整保留，不可刪除。請自動排版、縮排與美化其中的 CSS 語法。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 但未提供 :focus），請嘗試修復並在此步驟後記錄於 changes 中的 warning。
+2. 針對標籤內的 inline style（如 style="..."）：請先判斷其樣式是否有實質意義或符合無障礙規則。若僅是 Word/Docs 工具產生的垃圾代碼（如 mso-*、無意義的字型宣告 font-family）、或是會破壞無障礙（例如導致色彩對比度過低、干擾閱讀）的樣式，請將其移除；若判斷為有意義且合規的排版樣式，則必須予以保留。
+
+【第三步：無障礙修復（WCAG 2.1 ${level}）】
 1. 標題層級規則：${getHeadingInstruction()} 只調整已存在的標題標籤（h1~h6），不可將 <p> 升級為標題，保留原始內容的語意結構。
 2. <img> 缺少 alt 屬性時，根據以下優先順序推測並填入 alt 文字：①圖片周圍的標題、說明文字、段落內容；②圖片的 src 檔名（去除副檔名、將連字號/底線轉為空格）；③若無法推測則填 alt="圖片"。每張圖片在 changes 中以 warning 列出推測結果，標記需人工確認是否正確。
 3. <iframe> 缺少 title 屬性時，根據以下優先順序推測並填入 title：①iframe 周圍的標題或說明文字；②src URL 中可辨識的關鍵字；③若為 YouTube 則填 title="YouTube 影片"，其他來源則填 title="內嵌影片"。在 changes 中以 warning 標記需人工確認。
