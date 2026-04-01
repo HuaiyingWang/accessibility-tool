@@ -511,27 +511,27 @@ async function run() {
   ['btn-copy','btn-download','btn-reuse'].forEach(id =>
     document.getElementById(id).style.display = 'none');
 
-  const systemPrompt = `你是一位專業的 HTML/CSS 無障礙工程師。請清理並修復以下 HTML 與 CSS，使其符合 WCAG 2.1 ${level} 標準。
+  const systemPrompt = `你是一位專業的 HTML 無障礙工程師。請清理並修復以下 HTML，使其符合 WCAG 2.1 ${level} 標準。
 
-【第一步：清理垃圾內容與結構優化】
-1. 移除 Microsoft Word 與 Google Docs 殘留標籤：mso-*、docs-internal-guid-*、<o:p>、xml 宣告、與工具殘留的無語意 class (如 MsoNormal)。
-2. 清理多餘節點與字體：合併或移除雜亂且無意義的多層次 <span> 標籤嵌套。強制移除如 'Comic Sans MS' 等不專業且干擾閱讀的字體設定。
-3. 移除空白標籤：清空內容只含空白或 &nbsp; 的 <p>、<span>、<div>。
-4. 清理排版：超過 2 個連續 <br> 只保留 1 個，移除段落開頭或排版濫用的 &nbsp;。
+【第一步：清理垃圾內容】
+1. 移除 Microsoft Word 貼上殘留：mso-* 屬性、<o:p> 標籤、<!--[if ...]> 條件式註解、xml namespace 宣告
+2. 移除 Google Docs 殘留：docs-internal-guid-* 屬性/class、多餘的空 <span>
+3. 移除空白標籤：內容為空或只含空白/&nbsp; 的 <p>、<span>、<div>
+4. 清理連續 <br>：超過 2 個連續 <br> 只保留 1 個
+5. 移除排版用的 &nbsp; 濫用（段落開頭空格等）
+6. 移除無意義 inline style：font-family、font-size、color、background-color、mso-* 等
+7. 移除無語意 class：MsoNormal、MsoListParagraph、MsoBodyText 等 Word class
 
-【第二步：樣式處理（包含 HTML 內的 style 屬性與獨立的 <style> 標籤）】
-1. 獨立 <style> 標籤：必須完整保留。請自動排版美化 CSS 語法。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請修復並記錄於 changes。
-2. 行內樣式（style="..."）：判斷其是否有實質意義。若為無意義字型宣告、會破壞無障礙（如對比度過低）的樣式請移除；若屬有意義之排版樣式予以保留。
+【第二步：無障礙修復（WCAG 2.1 ${level}）】
+1. 標題層級規則：${getHeadingInstruction()} 只調整已存在的標題標籤（h1~h6），不可將 <p> 升級為標題，保留原始內容的語意結構。
+2. <img> 缺少 alt 屬性時，根據以下優先順序推測並填入 alt 文字：①圖片周圍的標題、說明文字、段落內容；②圖片的 src 檔名（去除副檔名、將連字號/底線轉為空格）；③若無法推測則填 alt="圖片"。每張圖片在 changes 中以 warning 列出推測結果，標記需人工確認是否正確。
+3. <iframe> 缺少 title 屬性時，根據以下優先順序推測並填入 title：①iframe 周圍的標題或說明文字；②src URL 中可辨識的關鍵字；③若為 YouTube 則填 title="YouTube 影片"，其他來源則填 title="內嵌影片"。在 changes 中以 warning 標記需人工確認。
+4. <table> 補上 <th scope="col"> 欄標題或 <th scope="row"> 列標題
+5. 將 tabindex 大於 0 的值移除或改為 0
+6. 確保 <button> 有可見文字，若無則加上 aria-label
+7. <a> 的連結文字若為「點此」「更多」「click here」等無描述文字，在 changes 中標記需人工修改
 
-【第三步：無障礙與語意化修復（WCAG 2.1 ${level}）】
-1. 標題與大綱優化：${getHeadingInstruction()} 若原始「具有大字體設計感的標題」被迫調整層級，可使用合理的 style 保留其視覺大小；若是利用粗體 <p> 偽裝的標題，請轉換為正確的標題標籤 <hX>，既保有設計感又符合規範。
-2. 語意化清單：將手動輸入編號的段落（如 1. 2. 3. 等）自動轉換為語意化的 <ol> 標籤與 <li> 標籤；項目符號轉為 <ul>，讓報讀系統能正確識別清單。
-3. 無障礙連結補強：<a> 的連結若為「點此」等無意義文字，請標記需人工修改。如果是外部或開啟新視窗連結，請強制補齊 target="_blank"、rel="noopener noreferrer" 與合適的 title 語音提示。
-4. 圖片與行動端 RWD 處理：移除 <img>、<p>、<div> 等元素寫死的固定寬度（如 width: XXpx），改用百分比或 max-width 以提升手機端可讀性。<img> 加上 style="max-width: 100%; height: auto;" 防失真並推論補填 alt。
-5. 表格與 <iframe>：<table> 必須補上 <th scope="col"> 或 <th scope="row">；為了避免行動端表格破版，請自動在 <table> 外層包覆 <div style="overflow-x: auto;">。iframe 推測補上 title。
-6. 表單與其他：將 tabindex 大於 0 的值移除或改為 0；確保 <button> 有可見文字或 aria-label。
-
-請只回傳以下 JSON 格式，不要加任何內文說明（【重要】確保回傳的是嚴格合法的 JSON，"html" 欄位值若有雙引號請轉義，且所有換行符號必須轉義為 \\n，不可出現未轉義的換行！）：
+請只回傳以下 JSON 格式，不要加任何說明文字：
 {
   "html": "修復後的完整 HTML",
   "changes": [

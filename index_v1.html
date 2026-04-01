@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>無障礙內文潤飾工具</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f6fa; --surface: #fff; --border: #dde1ea;
+      --text: #1a1d2e; --muted: #6b7280;
+      --primary: #2563eb; --primary-hover: #1d4ed8; --primary-light: #eff6ff;
+      --success: #16a34a; --warn-bg: #fffbeb; --warn-border: #fcd34d;
+      --aa-color: #0369a1; --aaa-color: #7c3aed;
+      --radius: 12px; --shadow: 0 1px 4px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);
+    }
+    body { font-family:'Segoe UI','Microsoft JhengHei',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:24px 16px 56px; }
+    header { text-align:center; margin-bottom:32px; }
+    header h1 { font-size:1.75rem; font-weight:700; letter-spacing:-.3px; }
+    header p { margin-top:6px; color:var(--muted); font-size:.95rem; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; margin-bottom:16px; }
+    .step-label { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:12px; }
+    .level-group { display:flex; gap:12px; }
+    .level-btn { flex:1; padding:14px; border:2px solid var(--border); border-radius:10px; background:var(--surface); cursor:pointer; transition:all .15s; text-align:center; }
+    .level-btn:hover { border-color:var(--primary); background:var(--primary-light); }
+    .level-btn.active-aa  { border-color:var(--aa-color);  background:#f0f9ff; }
+    .level-btn.active-aaa { border-color:var(--aaa-color); background:#faf5ff; }
+    .level-btn .badge { display:inline-block; font-size:1.1rem; font-weight:800; padding:2px 10px; border-radius:6px; margin-bottom:4px; background:var(--border); color:var(--muted); }
+    .level-btn.active-aa  .badge { background:var(--aa-color);  color:#fff; }
+    .level-btn.active-aaa .badge { background:var(--aaa-color); color:#fff; }
+    .level-btn .desc { font-size:.78rem; color:var(--muted); }
+    textarea { width:100%; min-height:180px; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:.85rem; font-family:'Consolas','Courier New',monospace; resize:vertical; outline:none; transition:border-color .15s; line-height:1.6; color:var(--text); }
+    textarea:focus { border-color:var(--primary); }
+    .input-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 20px; border:none; border-radius:8px; font-size:.9rem; font-weight:600; cursor:pointer; transition:all .15s; }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-primary:hover { background:var(--primary-hover); }
+    .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+    .btn-ghost:hover { background:var(--bg); }
+    .btn-success { background:#dcfce7; color:var(--success); border:1px solid #bbf7d0; }
+    .btn-success:hover { background:#bbf7d0; }
+    .output-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+    .output-tabs { display:flex; gap:4px; }
+    .tab-btn { padding:5px 14px; border:1px solid var(--border); border-radius:6px; background:transparent; font-size:.82rem; cursor:pointer; transition:all .12s; color:var(--muted); }
+    .tab-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+    #output-code { background:#1e1e2e; color:#cdd6f4; border-radius:8px; padding:16px; font-family:'Consolas','Courier New',monospace; font-size:.8rem; line-height:1.7; overflow-x:auto; white-space:pre-wrap; word-break:break-all; min-height:120px; max-height:500px; overflow-y:auto; }
+    #output-preview { border:1px solid var(--border); border-radius:8px; padding:20px; min-height:120px; max-height:500px; overflow-y:auto; display:none; }
+    .copy-feedback { font-size:.8rem; color:var(--success); opacity:0; transition:opacity .3s; }
+    .copy-feedback.show { opacity:1; }
+    .changes-list { margin-top:16px; }
+    .changes-list summary { cursor:pointer; font-size:.85rem; font-weight:600; color:var(--primary); user-select:none; padding:4px 0; }
+    .changes-list ul { margin-top:8px; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:5px; }
+    .changes-list li { font-size:.8rem; background:var(--warn-bg); border:1px solid var(--warn-border); border-radius:6px; padding:6px 10px; color:#78350f; line-height:1.5; }
+    .changes-list li::before { content:'✓ '; color:var(--success); font-weight:700; }
+    .divider { border:none; border-top:1px solid var(--border); margin:16px 0; }
+    .history-bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .history-chip { padding:3px 12px; border-radius:20px; border:1px solid var(--border); font-size:.75rem; cursor:pointer; transition:all .12s; background:var(--surface); color:var(--muted); }
+    .history-chip:hover { border-color:var(--primary); color:var(--primary); }
+    .history-chip.current { border-color:var(--primary); background:var(--primary-light); color:var(--primary); font-weight:600; }
+    .badge-tag { font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:6px; }
+    .badge-aa  { background:#dbeafe; color:var(--aa-color); }
+    .badge-aaa { background:#ede9fe; color:var(--aaa-color); }
+    .max-w { max-width:840px; margin:0 auto; }
+    @media(max-width:520px){ .level-group{flex-direction:column;} .output-header{flex-direction:column;align-items:flex-start;} }
+  </style>
+</head>
+<body>
+<div class="max-w">
+  <header>
+    <h1>無障礙內文潤飾</h1>
+    <p>貼上任意文字或 HTML，自動生成符合 WCAG 2.1 規範的無障礙架構（純前端，無需 API）</p>
+  </header>
+
+  <!-- Step 1 -->
+  <div class="card">
+    <div class="step-label">Step 1 — 選擇無障礙標章等級</div>
+    <div class="level-group" role="group" aria-label="無障礙等級">
+      <button class="level-btn active-aa" id="btn-aa" onclick="setLevel('AA')" aria-pressed="true">
+        <div class="badge">AA</div>
+        <div class="desc">WCAG 2.1 Level AA<br>一般網站標準合規</div>
+      </button>
+      <button class="level-btn" id="btn-aaa" onclick="setLevel('AAA')" aria-pressed="false">
+        <div class="badge">AAA</div>
+        <div class="desc">WCAG 2.1 Level AAA<br>最高無障礙標準</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <div class="step-label">Step 2 — 輸入內容或原始碼</div>
+    <textarea id="input-area" placeholder="貼上純文字、HTML 片段、或完整 HTML 文件…&#10;&#10;支援自動偵測輸入類型：&#10;• 純文字 → 轉換為語意化 HTML&#10;• HTML 片段 → 修復無障礙問題&#10;• 完整文件 → 全面無障礙審查" aria-label="輸入內容"></textarea>
+    <div class="input-actions">
+      <button class="btn btn-ghost" onclick="clearInput()">清除</button>
+      <button class="btn btn-primary" id="submit-btn" onclick="generate()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        生成無障礙 HTML
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 3 & 4 -->
+  <div class="card" id="output-card" style="display:none">
+    <div class="output-header">
+      <div>
+        <div class="step-label" style="margin-bottom:4px">Step 3 — 生成結果
+          <span id="level-badge-out" class="badge-tag"></span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="copy-feedback" id="copy-feedback">已複製！</span>
+        <div class="output-tabs">
+          <button class="tab-btn active" id="tab-code" onclick="switchTab('code')">原始碼</button>
+          <button class="tab-btn" id="tab-preview" onclick="switchTab('preview')">預覽</button>
+        </div>
+        <button class="btn btn-success" onclick="copyOutput()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          複製
+        </button>
+      </div>
+    </div>
+
+    <pre id="output-code" aria-label="生成的 HTML 原始碼" tabindex="0"></pre>
+    <div id="output-preview" aria-label="HTML 預覽"></div>
+
+    <!-- Changes log -->
+    <details class="changes-list" id="changes-details">
+      <summary id="changes-summary">已套用 0 項無障礙修正</summary>
+      <ul id="changes-list"></ul>
+    </details>
+
+    <hr class="divider" />
+
+    <!-- Step 4 -->
+    <div class="step-label">Step 4 — 反覆修改</div>
+    <p style="font-size:.82rem;color:var(--muted);margin:6px 0 10px">直接編輯下方原始碼，或將修改後的內容貼入 Step 2 的輸入框，再次點擊「生成」即可重新套用所有無障礙修正。</p>
+    <textarea id="edit-area" aria-label="可直接編輯的 HTML 原始碼" style="min-height:160px;font-size:.8rem;"></textarea>
+    <div class="input-actions">
+      <button class="btn btn-ghost" onclick="loadEditToInput()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        重新套用修正
+      </button>
+      <button class="btn btn-primary" onclick="applyEdit()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        更新結果
+      </button>
+    </div>
+
+    <!-- History -->
+    <div id="history-section" style="display:none;margin-top:14px">
+      <div class="step-label" style="margin-bottom:6px">版本紀錄</div>
+      <div class="history-bar" id="history-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── 狀態 ───────────────────────────────────────────────────────────────────
+let level = 'AA';
+let currentOutput = '';
+let history = []; // [{label, html, changes}]
+let historyIdx = -1;
+
+// ─── Level ──────────────────────────────────────────────────────────────────
+function setLevel(l) {
+  level = l;
+  document.getElementById('btn-aa').className  = 'level-btn' + (l === 'AA'  ? ' active-aa'  : '');
+  document.getElementById('btn-aaa').className = 'level-btn' + (l === 'AAA' ? ' active-aaa' : '');
+  document.getElementById('btn-aa').setAttribute('aria-pressed',  l === 'AA'  ? 'true' : 'false');
+  document.getElementById('btn-aaa').setAttribute('aria-pressed', l === 'AAA' ? 'true' : 'false');
+}
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+function clearInput() {
+  document.getElementById('input-area').value = '';
+  document.getElementById('input-area').focus();
+}
+
+// ─── Generate ───────────────────────────────────────────────────────────────
+function generate() {
+  const input = document.getElementById('input-area').value.trim();
+  if (!input) { alert('請先輸入內容'); return; }
+  const t = new A11yTransformer(level);
+  const { html, changes } = t.transform(input);
+  pushHistory(html, changes, '生成 v' + (history.length + 1));
+  showOutput(html, changes);
+}
+
+// ─── Edit & re-apply ────────────────────────────────────────────────────────
+function applyEdit() {
+  const edited = document.getElementById('edit-area').value.trim();
+  if (!edited) return;
+  currentOutput = edited;
+  document.getElementById('output-code').textContent = edited;
+  switchTab('code');
+}
+
+function loadEditToInput() {
+  const edited = document.getElementById('edit-area').value.trim();
+  if (!edited) return;
+  document.getElementById('input-area').value = edited;
+  document.getElementById('output-card').scrollIntoView({ behavior:'smooth' });
+  generate();
+}
+
+// ─── Output display ─────────────────────────────────────────────────────────
+function showOutput(html, changes) {
+  currentOutput = html;
+  document.getElementById('output-code').textContent = html;
+  document.getElementById('edit-area').value = html;
+  document.getElementById('output-preview').innerHTML = html;
+  document.getElementById('output-card').style.display = 'block';
+
+  const tag = document.getElementById('level-badge-out');
+  tag.textContent = 'WCAG 2.1 ' + level;
+  tag.className = 'badge-tag ' + (level === 'AAA' ? 'badge-aaa' : 'badge-aa');
+
+  // Changes
+  const list = document.getElementById('changes-list');
+  list.innerHTML = '';
+  changes.forEach(c => {
+    const li = document.createElement('li');
+    li.textContent = c;
+    list.appendChild(li);
+  });
+  document.getElementById('changes-summary').textContent = `已套用 ${changes.length} 項無障礙修正`;
+  if (changes.length > 0) document.getElementById('changes-details').setAttribute('open', '');
+
+  switchTab('code');
+  document.getElementById('output-card').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ─── Tab ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const code = document.getElementById('output-code');
+  const preview = document.getElementById('output-preview');
+  document.getElementById('tab-code').classList.toggle('active', tab === 'code');
+  document.getElementById('tab-preview').classList.toggle('active', tab === 'preview');
+  code.style.display    = tab === 'code'    ? 'block' : 'none';
+  preview.style.display = tab === 'preview' ? 'block' : 'none';
+}
+
+// ─── Copy ────────────────────────────────────────────────────────────────────
+function copyOutput() {
+  if (!currentOutput) return;
+  navigator.clipboard.writeText(currentOutput).then(() => {
+    const fb = document.getElementById('copy-feedback');
+    fb.classList.add('show');
+    setTimeout(() => fb.classList.remove('show'), 1800);
+  });
+}
+
+// ─── History ─────────────────────────────────────────────────────────────────
+function pushHistory(html, changes, label) {
+  history.push({ label, html, changes });
+  historyIdx = history.length - 1;
+  renderHistory();
+}
+
+function renderHistory() {
+  if (history.length <= 1) { document.getElementById('history-section').style.display = 'none'; return; }
+  document.getElementById('history-section').style.display = 'block';
+  const bar = document.getElementById('history-bar');
+  bar.innerHTML = '';
+  history.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'history-chip' + (i === historyIdx ? ' current' : '');
+    btn.textContent = item.label;
+    btn.setAttribute('aria-label', `還原至 ${item.label}`);
+    btn.onclick = () => {
+      historyIdx = i;
+      showOutput(item.html, item.changes);
+      renderHistory();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+// Keyboard shortcut
+document.getElementById('input-area').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generate();
+});
+
+// ─── A11yTransformer ────────────────────────────────────────────────────────
+class A11yTransformer {
+  constructor(lvl) {
+    this.level = lvl;
+    this.changes = [];
+  }
+
+  log(msg) { this.changes.push(msg); }
+
+  transform(raw) {
+    this.changes = [];
+    const input = raw.trim();
+    if (!input) return { html: '', changes: [] };
+    const type = this.detectType(input);
+
+    if (type === 'full') {
+      const doc = new DOMParser().parseFromString(input, 'text/html');
+      this.fixAll(doc, false);
+      return { html: this.serialize(doc), changes: this.changes };
+    }
+
+    if (type === 'fragment') {
+      const doc = new DOMParser().parseFromString(
+        `<!DOCTYPE html><html><body>${input}</body></html>`, 'text/html'
+      );
+      this.fixAll(doc, true);
+      return { html: this.format(doc.body.innerHTML.trim()), changes: this.changes };
+    }
+
+    // plain text
+    const html = this.textToHTML(input);
+    return { html: this.format(html), changes: this.changes };
+  }
+
+  detectType(s) {
+    if (/^<!doctype\s+html/i.test(s) || /^<html[\s>]/i.test(s)) return 'full';
+    if (/<[a-z][a-z0-9]*[\s>/]/i.test(s)) return 'fragment';
+    return 'text';
+  }
+
+  fixAll(doc, fragmentMode = false) {
+    if (!fragmentMode) {
+      this.fixHtmlElement(doc);
+      this.fixHead(doc);
+      this.addSkipLink(doc);
+      this.fixMainLandmark(doc);
+    }
+    this.cleanHTML(doc);        // 先清除冗餘標籤與屬性
+    this.fixSemanticDivs(doc);
+    this.fixImages(doc);
+    this.fixForms(doc);
+    this.fixHeadings(doc);
+    this.fixLinks(doc);
+    this.fixTables(doc);
+    this.fixButtons(doc);
+    this.fixIframes(doc);
+    this.fixNavLandmarks(doc);
+    this.fixFontSizes(doc);
+    if (this.level === 'AAA') this.applyAAA(doc);
+  }
+
+  // ── Document / Head ──────────────────────────────────────────────────────
+  fixHtmlElement(doc) {
+    const html = doc.documentElement;
+    if (!html.hasAttribute('lang')) {
+      html.setAttribute('lang', 'zh-Hant');
+      this.log('加入 <html lang="zh-Hant"> — 宣告頁面語言（WCAG 3.1.1）');
+    }
+  }
+
+  fixHead(doc) {
+    const head = doc.head;
+    if (!head.querySelector('meta[charset]')) {
+      const m = doc.createElement('meta'); m.setAttribute('charset','UTF-8');
+      head.insertBefore(m, head.firstChild);
+      this.log('加入 <meta charset="UTF-8">');
+    }
+    if (!head.querySelector('meta[name="viewport"]')) {
+      const m = doc.createElement('meta');
+      m.setAttribute('name','viewport'); m.setAttribute('content','width=device-width, initial-scale=1.0');
+      head.appendChild(m);
+      this.log('加入 viewport meta — 支援響應式縮放');
+    }
+    const title = head.querySelector('title');
+    if (!title) {
+      const t = doc.createElement('title'); t.textContent = '無標題頁面';
+      head.appendChild(t);
+      this.log('加入 <title> — 頁面標題（WCAG 2.4.2）');
+    } else if (!title.textContent.trim()) {
+      title.textContent = '無標題頁面';
+      this.log('填入空白 <title>（WCAG 2.4.2）');
+    }
+    this.addFocusCSS(doc);
+    if (this.level === 'AAA') this.addAAAContrastCSS(doc);
+  }
+
+  addFocusCSS(doc) {
+    if (doc.querySelector('style[data-a11y="focus"]')) return;
+    const s = doc.createElement('style');
+    s.setAttribute('data-a11y','focus');
+    s.textContent = [
+      '/* 無障礙焦點樣式 */',
+      ':focus-visible{outline:3px solid #005fcc;outline-offset:2px;}',
+      '.skip-link{position:absolute;top:-100%;left:0;background:#005fcc;color:#fff;',
+      '  padding:8px 16px;text-decoration:none;font-weight:bold;z-index:9999;}',
+      '.skip-link:focus{top:0;}',
+      '.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;',
+      '  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}'
+    ].join('\n');
+    doc.head.appendChild(s);
+    this.log('加入焦點可見樣式（:focus-visible）與 .skip-link、.sr-only CSS（WCAG 2.4.7）');
+  }
+
+  addAAAContrastCSS(doc) {
+    if (doc.querySelector('style[data-a11y="aaa"]')) return;
+    const s = doc.createElement('style');
+    s.setAttribute('data-a11y','aaa');
+    s.textContent = [
+      '/* WCAG AAA 增強對比（目標 7:1） */',
+      ':root{--c-text:#0a0a0a;--c-bg:#ffffff;--c-link:#003d99;--c-link-visited:#4a0080;}',
+      'body{color:var(--c-text);background:var(--c-bg);}',
+      'a{color:var(--c-link);}a:visited{color:var(--c-link-visited);}',
+      ':focus-visible{outline:4px solid #003d99;outline-offset:3px;',
+      '  box-shadow:0 0 0 6px rgba(0,61,153,.2);}'
+    ].join('\n');
+    doc.head.appendChild(s);
+    this.log('加入 AAA 增強對比 CSS 變數（7:1 對比比率，WCAG 1.4.6）');
+  }
+
+  // ── Skip Link ─────────────────────────────────────────────────────────────
+  addSkipLink(doc) {
+    if (doc.body.querySelector('a.skip-link,a[href="#main-content"]')) return;
+    const a = doc.createElement('a');
+    a.className = 'skip-link'; a.setAttribute('href','#main-content');
+    a.textContent = '跳至主要內容';
+    doc.body.insertBefore(a, doc.body.firstChild);
+    this.log('加入「跳至主要內容」Skip Navigation 連結（WCAG 2.4.1）');
+  }
+
+  // ── Main Landmark ─────────────────────────────────────────────────────────
+  fixMainLandmark(doc) {
+    let main = doc.body.querySelector('main, [role="main"]');
+    if (!main) {
+      const skip = doc.body.querySelector('a.skip-link');
+      const frag = doc.createDocumentFragment();
+      Array.from(doc.body.childNodes).filter(n => n !== skip).forEach(n => frag.appendChild(n));
+      main = doc.createElement('main');
+      main.setAttribute('id','main-content');
+      main.appendChild(frag);
+      doc.body.appendChild(main);
+      this.log('加入 <main id="main-content"> 主要內容地標（WCAG 1.3.6）');
+    } else if (!main.id) {
+      main.setAttribute('id','main-content');
+      this.log('為 <main> 加入 id="main-content" 以支援跳過導覽');
+    }
+  }
+
+  // ── Semantic Divs ─────────────────────────────────────────────────────────
+  fixSemanticDivs(doc) {
+    const map = {
+      header: ['header','page-header','site-header','masthead','top-bar'],
+      nav:    ['nav','navigation','navbar','menu','site-nav','main-nav'],
+      footer: ['footer','page-footer','site-footer','bottom'],
+      aside:  ['sidebar','side-bar','aside','side-content'],
+    };
+    Object.entries(map).forEach(([tag, cls]) => {
+      if (doc.querySelector(tag)) return; // already exists
+      doc.querySelectorAll('div').forEach(div => {
+        const cn = (div.className || '').toLowerCase();
+        const id = (div.id || '').toLowerCase();
+        if (cls.some(c => cn.includes(c) || id === c || id.includes(c))) {
+          const el = doc.createElement(tag);
+          Array.from(div.attributes).forEach(a => el.setAttribute(a.name, a.value));
+          while (div.firstChild) el.appendChild(div.firstChild);
+          div.parentNode.replaceChild(el, div);
+          this.log(`<div class="${div.className || div.id}"> → 語意化 <${tag}>（WCAG 1.3.1）`);
+        }
+      });
+    });
+  }
+
+  // ── Images ───────────────────────────────────────────────────────────────
+  fixImages(doc) {
+    doc.querySelectorAll('img').forEach(img => {
+      if (img.hasAttribute('alt')) return;
+      const role = img.getAttribute('role');
+      if (role === 'presentation' || role === 'none') {
+        img.setAttribute('alt', '');
+        return;
+      }
+      const src = img.getAttribute('src') || '';
+      const name = src.split('/').pop().replace(/\.\w+$/, '').replace(/[-_]/g, ' ').trim();
+      img.setAttribute('alt', name || '圖片');
+      this.log(`<img src="${src.slice(-40)}"> 加入 alt="${name || '圖片'}"（WCAG 1.1.1）`);
+    });
+  }
+
+  // ── Forms ─────────────────────────────────────────────────────────────────
+  fixForms(doc) {
+    const skipTypes = new Set(['hidden','submit','button','reset','image']);
+    doc.querySelectorAll('input,textarea,select').forEach(el => {
+      if (el.tagName === 'INPUT' && skipTypes.has(el.type)) return;
+      const hasLabel =
+        (el.id && doc.querySelector(`label[for="${el.id}"]`)) ||
+        el.closest('label') ||
+        el.hasAttribute('aria-label') ||
+        el.hasAttribute('aria-labelledby');
+      if (hasLabel) return;
+      const hint = el.getAttribute('placeholder') || el.getAttribute('name') || el.type || '欄位';
+      if (!el.id) el.id = 'field-' + Math.random().toString(36).slice(2,8);
+      const label = doc.createElement('label');
+      label.setAttribute('for', el.id);
+      label.textContent = hint;
+      el.parentNode.insertBefore(label, el);
+      this.log(`<${el.tagName.toLowerCase()} name="${hint}"> 加入關聯 <label>（WCAG 1.3.1、3.3.2）`);
+    });
+
+    // Radio groups → fieldset/legend
+    const radioGroups = {};
+    doc.querySelectorAll('input[type="radio"]').forEach(r => {
+      const name = r.getAttribute('name') || '_group';
+      (radioGroups[name] = radioGroups[name] || []).push(r);
+    });
+    Object.entries(radioGroups).forEach(([name, radios]) => {
+      if (radios.length < 2 || radios[0].closest('fieldset')) return;
+      const fieldset = doc.createElement('fieldset');
+      const legend = doc.createElement('legend'); legend.textContent = name;
+      fieldset.appendChild(legend);
+      const ref = radios[0];
+      ref.parentNode.insertBefore(fieldset, ref);
+      radios.forEach(r => {
+        const lbl = doc.querySelector(`label[for="${r.id}"]`);
+        fieldset.appendChild(r);
+        if (lbl) fieldset.appendChild(lbl);
+      });
+      this.log(`radio group "${name}" 包裝 <fieldset><legend>（WCAG 1.3.1）`);
+    });
+  }
+
+  // ── Headings ──────────────────────────────────────────────────────────────
+  fixHeadings(doc) {
+    // Multiple h1
+    const h1s = Array.from(doc.querySelectorAll('h1'));
+    if (h1s.length > 1) {
+      h1s.slice(1).forEach(h => {
+        const h2 = doc.createElement('h2');
+        Array.from(h.attributes).forEach(a => h2.setAttribute(a.name, a.value));
+        while (h.firstChild) h2.appendChild(h.firstChild);
+        h.parentNode.replaceChild(h2, h);
+        this.log('重複 <h1> 降為 <h2>（WCAG 1.3.1）');
+      });
+    }
+
+    // Fix skipped levels
+    const headings = Array.from(doc.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+    let prev = 0;
+    headings.forEach(h => {
+      const lvl = parseInt(h.tagName[1]);
+      if (prev > 0 && lvl > prev + 1) {
+        const fixed = prev + 1;
+        const newH = doc.createElement(`h${fixed}`);
+        Array.from(h.attributes).forEach(a => newH.setAttribute(a.name, a.value));
+        while (h.firstChild) newH.appendChild(h.firstChild);
+        h.parentNode.replaceChild(newH, h);
+        this.log(`標題跳級 <${h.tagName.toLowerCase()}> → <h${fixed}>（WCAG 1.3.1）`);
+        prev = fixed;
+      } else {
+        prev = lvl;
+      }
+    });
+  }
+
+  // ── Links ─────────────────────────────────────────────────────────────────
+  fixLinks(doc) {
+    const generic = new Set(['點此','這裡','按此','更多','點我','click here','here','read more','more','link','…','...']);
+    let addedSROly = false;
+    doc.querySelectorAll('a').forEach(a => {
+      const text = a.textContent.trim();
+      const href = a.getAttribute('href') || '';
+
+      if (!text && !a.getAttribute('aria-label') && !a.querySelector('img[alt]')) {
+        a.setAttribute('aria-label', href || '連結');
+        this.log(`空白連結加入 aria-label（WCAG 2.4.4）`);
+        return;
+      }
+
+      if (generic.has(text.toLowerCase()) && !a.getAttribute('aria-label')) {
+        const ctx = (a.closest('p')?.textContent || href || text).slice(0, 40);
+        a.setAttribute('aria-label', `${text}：${ctx}`);
+        this.log(`模糊連結「${text}」加入 aria-label（WCAG 2.4.4）`);
+      }
+
+      if (a.getAttribute('target') === '_blank') {
+        const label = a.getAttribute('aria-label') || text;
+        if (!label.includes('新視窗') && !label.includes('new tab')) {
+          const span = doc.createElement('span');
+          span.className = 'sr-only'; span.textContent = '（在新視窗開啟）';
+          a.appendChild(span);
+          addedSROly = true;
+          this.log(`target="_blank" 連結加入新視窗提示（WCAG 3.2.2）`);
+        }
+      }
+    });
+  }
+
+  // ── Tables ────────────────────────────────────────────────────────────────
+  fixTables(doc) {
+    doc.querySelectorAll('table').forEach(tbl => {
+      if (!tbl.querySelector('caption')) {
+        const cap = doc.createElement('caption'); cap.textContent = '資料表格';
+        tbl.insertBefore(cap, tbl.firstChild);
+        this.log('<table> 加入 <caption>（WCAG 1.3.1）');
+      }
+      tbl.querySelectorAll('th').forEach(th => {
+        if (!th.hasAttribute('scope')) {
+          const isFirst = th.closest('tr') === tbl.querySelector('tr');
+          th.setAttribute('scope', isFirst ? 'col' : 'row');
+          this.log('<th> 加入 scope 屬性（WCAG 1.3.1）');
+        }
+      });
+      // Wrap header row in thead
+      const firstRow = tbl.querySelector('tr');
+      if (firstRow && firstRow.querySelector('th') && !tbl.querySelector('thead')) {
+        const thead = doc.createElement('thead');
+        firstRow.parentNode.insertBefore(thead, firstRow);
+        thead.appendChild(firstRow);
+        const remaining = Array.from(tbl.querySelectorAll('tr')).filter(r => !r.closest('thead'));
+        if (remaining.length && !tbl.querySelector('tbody')) {
+          const tbody = doc.createElement('tbody');
+          tbl.appendChild(tbody);
+          remaining.forEach(r => tbody.appendChild(r));
+        }
+        this.log('標題列包裝 <thead>，內容列包裝 <tbody>（WCAG 1.3.1）');
+      }
+      if (!tbl.hasAttribute('aria-label')) {
+        const cap = tbl.querySelector('caption');
+        if (cap) tbl.setAttribute('aria-label', cap.textContent);
+      }
+    });
+  }
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  fixButtons(doc) {
+    doc.querySelectorAll('button').forEach(btn => {
+      const ok = btn.textContent.trim() || btn.getAttribute('aria-label') ||
+                 btn.getAttribute('aria-labelledby') || btn.querySelector('img[alt]');
+      if (!ok) {
+        btn.setAttribute('aria-label', '按鈕');
+        this.log('無文字 <button> 加入 aria-label（WCAG 4.1.2）');
+      }
+    });
+    doc.querySelectorAll('div[onclick],span[onclick]').forEach(el => {
+      if (!el.getAttribute('role')) {
+        el.setAttribute('role','button');
+        el.setAttribute('tabindex','0');
+        this.log(`可點擊 <${el.tagName.toLowerCase()}> 加入 role="button" tabindex="0"（WCAG 4.1.2）`);
+      }
+    });
+  }
+
+  // ── iframes ───────────────────────────────────────────────────────────────
+  fixIframes(doc) {
+    doc.querySelectorAll('iframe').forEach(f => {
+      if (f.hasAttribute('title')) return;
+      const src = f.getAttribute('src') || '';
+      let t = '內嵌內容';
+      if (/youtube|youtu\.be/.test(src)) t = 'YouTube 影片';
+      else if (/vimeo/.test(src)) t = 'Vimeo 影片';
+      else if (/google\.com\/maps/.test(src)) t = 'Google 地圖';
+      f.setAttribute('title', t);
+      this.log(`<iframe> 加入 title="${t}"（WCAG 4.1.2）`);
+    });
+  }
+
+  // ── Nav landmarks ─────────────────────────────────────────────────────────
+  fixNavLandmarks(doc) {
+    const navs = Array.from(doc.querySelectorAll('nav'));
+    const labels = ['主要導覽','次要導覽','麵包屑','頁尾導覽'];
+    navs.forEach((nav, i) => {
+      if (!nav.getAttribute('aria-label') && !nav.getAttribute('aria-labelledby')) {
+        nav.setAttribute('aria-label', navs.length > 1 ? (labels[i] || `導覽 ${i+1}`) : '主要導覽');
+        this.log(`<nav> 加入 aria-label（WCAG 1.3.6）`);
+      }
+    });
+  }
+
+  // ── Clean HTML（冗餘清理）────────────────────────────────────────────────
+  cleanHTML(doc) {
+    this.convertNonSemanticTags(doc);
+    this.removeDeprecatedTags(doc);
+    this.removeEmptyAttributes(doc);
+    this.deduplicateNestedTags(doc);
+    this.collapseMultipleBr(doc);
+    this.removeEmptyElements(doc);
+  }
+
+  // <b>→<strong>  <i>→<em>  <strike>→<del>
+  convertNonSemanticTags(doc) {
+    const map = { b: 'strong', i: 'em', strike: 'del' };
+    Object.entries(map).forEach(([from, to]) => {
+      doc.querySelectorAll(from).forEach(el => {
+        const neo = doc.createElement(to);
+        Array.from(el.attributes).forEach(a => neo.setAttribute(a.name, a.value));
+        while (el.firstChild) neo.appendChild(el.firstChild);
+        el.parentNode.replaceChild(neo, el);
+        this.log(`<${from}> → 語意化 <${to}>（WCAG 1.3.1）`);
+      });
+    });
+  }
+
+  // 移除 / 替換廢棄標籤
+  removeDeprecatedTags(doc) {
+    // <font> → 解除包裝，保留文字
+    doc.querySelectorAll('font').forEach(el => {
+      const frag = doc.createDocumentFragment();
+      while (el.firstChild) frag.appendChild(el.firstChild);
+      el.parentNode.replaceChild(frag, el);
+      this.log('移除廢棄 <font> 標籤，保留內容');
+    });
+    // <center> → <div style="text-align:center">
+    doc.querySelectorAll('center').forEach(el => {
+      const div = doc.createElement('div');
+      Array.from(el.attributes).forEach(a => div.setAttribute(a.name, a.value));
+      div.style.textAlign = 'center';
+      while (el.firstChild) div.appendChild(el.firstChild);
+      el.parentNode.replaceChild(div, el);
+      this.log('移除廢棄 <center>，替換為 <div style="text-align:center">');
+    });
+    // <marquee> → <p>（跑馬燈可能引發視覺問題，WCAG 2.3.1）
+    doc.querySelectorAll('marquee').forEach(el => {
+      const p = doc.createElement('p');
+      while (el.firstChild) p.appendChild(el.firstChild);
+      el.parentNode.replaceChild(p, el);
+      this.log('移除廢棄 <marquee>（可能引發癲癇發作，WCAG 2.3.1）');
+    });
+  }
+
+  // 移除空白屬性：class=""  id=""  style=""
+  removeEmptyAttributes(doc) {
+    const targets = ['class', 'id', 'style'];
+    doc.querySelectorAll('*').forEach(el => {
+      targets.forEach(attr => {
+        if (el.hasAttribute(attr) && !el.getAttribute(attr).trim()) {
+          el.removeAttribute(attr);
+          this.log(`移除 <${el.tagName.toLowerCase()}> 空白 ${attr} 屬性`);
+        }
+      });
+    });
+  }
+
+  // 移除重複巢狀相同標籤：<strong><strong>…</strong></strong>
+  deduplicateNestedTags(doc) {
+    ['strong', 'em', 'span', 'a'].forEach(tag => {
+      doc.querySelectorAll(`${tag} > ${tag}`).forEach(inner => {
+        const parent = inner.parentNode;
+        while (inner.firstChild) parent.insertBefore(inner.firstChild, inner);
+        parent.removeChild(inner);
+        this.log(`移除重複巢狀 <${tag}>`);
+      });
+    });
+  }
+
+  // 多個連續 <br> 合併為一個
+  collapseMultipleBr(doc) {
+    doc.querySelectorAll('br + br').forEach(br => {
+      // 確認前一個兄弟確實是 <br>（跳過空白文字節點）
+      let prev = br.previousSibling;
+      while (prev && prev.nodeType === 3 && !prev.textContent.trim()) prev = prev.previousSibling;
+      if (prev && prev.nodeName === 'BR') {
+        br.parentNode.removeChild(br);
+        this.log('移除多餘的連續 <br> 標籤');
+      }
+    });
+  }
+
+  // 移除空白 / 無內容的標籤（可多輪執行直到穩定）
+  removeEmptyElements(doc) {
+    const VOID = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+    const KEEP = new Set(['html','head','body','main','header','footer','nav','section','article','aside','table','thead','tbody','tfoot','tr','td','th','ul','ol','dl','select','datalist','optgroup','fieldset']);
+    const hasMeaningfulAttr = el =>
+      el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') ||
+      el.hasAttribute('role') || el.hasAttribute('id') ||
+      Array.from(el.attributes).some(a => a.name.startsWith('data-'));
+
+    // 判斷元素是否「實質為空」
+    // 涵蓋：純空白、&nbsp;(\u00a0)、零寬空格(\u200b)、多個 <br>、<span>&nbsp;</span> 等
+    const isEffectivelyEmpty = el => {
+      // 有圖片、表單、影音等有意義的子元素 → 不算空
+      if (el.querySelector('img,input,textarea,select,svg,iframe,video,audio,canvas,object,embed')) return false;
+      // 把所有空白類字元（含 &nbsp;）移除後看是否剩下實際文字
+      const text = el.textContent.replace(/[\u00a0\u200b\u200c\u200d\s]+/g, '');
+      return text === '';
+    };
+
+    let changed = true, rounds = 0;
+    while (changed && rounds++ < 8) {
+      changed = false;
+      Array.from(doc.querySelectorAll('*')).reverse().forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        if (VOID.has(tag) || KEEP.has(tag) || hasMeaningfulAttr(el)) return;
+        if (!el.parentNode) return;
+        if (isEffectivelyEmpty(el)) {
+          el.parentNode.removeChild(el);
+          this.log(`移除空白 <${tag}>（含 &nbsp; 或純空白內容）`);
+          changed = true;
+        }
+      });
+    }
+  }
+
+  // ── Font size px → rem ───────────────────────────────────────────────────
+  fixFontSizes(doc) {
+    const toRem = px => {
+      const val = parseFloat(px);
+      const rem = Math.round((val / 16) * 1000) / 1000;
+      return `${rem}rem`;
+    };
+    const RE = /font-size\s*:\s*([\d.]+)px/gi;
+
+    // Inline styles
+    doc.querySelectorAll('[style]').forEach(el => {
+      const orig = el.getAttribute('style');
+      const updated = orig.replace(RE, (_, px) => {
+        this.log(`inline style font-size: ${px}px → ${toRem(px)}（WCAG 1.4.4 文字縮放）`);
+        return `font-size: ${toRem(px)}`;
+      });
+      if (updated !== orig) el.setAttribute('style', updated);
+    });
+
+    // <style> 標籤
+    doc.querySelectorAll('style').forEach(styleEl => {
+      if (styleEl.getAttribute('data-a11y')) return; // 略過本工具注入的樣式
+      const orig = styleEl.textContent;
+      const updated = orig.replace(RE, (_, px) => {
+        this.log(`<style> font-size: ${px}px → ${toRem(px)}（WCAG 1.4.4 文字縮放）`);
+        return `font-size: ${toRem(px)}`;
+      });
+      if (updated !== orig) styleEl.textContent = updated;
+    });
+  }
+
+  // ── AAA extras ───────────────────────────────────────────────────────────
+  applyAAA(doc) {
+    doc.querySelectorAll('abbr:not([title])').forEach(abbr => {
+      abbr.setAttribute('title', abbr.textContent + '（縮寫）');
+      this.log('<abbr> 加入 title 說明（WCAG AAA 3.1.4）');
+    });
+    const alertSels = '[class*="alert"],[class*="notification"],[class*="toast"],[class*="message"]';
+    doc.querySelectorAll(alertSels).forEach(el => {
+      if (!el.getAttribute('aria-live')) {
+        el.setAttribute('aria-live','polite');
+        el.setAttribute('aria-atomic','true');
+        this.log('動態內容區域加入 aria-live="polite"（WCAG AAA 4.1.3）');
+      }
+    });
+    doc.body.insertBefore(
+      doc.createComment(' WCAG AAA 1.2.6：建議為主要內容提供手語版本替代 '),
+      doc.body.firstChild.nextSibling
+    );
+    this.log('加入手語替代建議注解（WCAG AAA 1.2.6）');
+    doc.body.insertBefore(
+      doc.createComment(' WCAG AAA 1.2.7：建議為影片提供擴展音訊描述 '),
+      doc.body.firstChild.nextSibling
+    );
+    this.log('加入擴展音訊描述建議注解（WCAG AAA 1.2.7）');
+  }
+
+  // ── Plain text → HTML ────────────────────────────────────────────────────
+  textToHTML(text) {
+    this.log('偵測到純文字，自動轉換語意化 HTML 結構');
+    const lines = text.split('\n');
+    let html = '', para = [], inUl = false, inOl = false, first = true;
+
+    const flush = () => {
+      if (para.length) { html += `<p>${para.join(' ')}</p>\n`; para = []; }
+    };
+    const flushList = () => {
+      if (inUl) { html += '</ul>\n'; inUl = false; }
+      if (inOl) { html += '</ol>\n'; inOl = false; }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i], t = raw.trim();
+      if (!t) { flush(); flushList(); continue; }
+
+      // ATX headings
+      const atx = t.match(/^(#{1,6})\s+(.*)/);
+      if (atx) {
+        flush(); flushList();
+        html += `<h${atx[1].length}>${esc(atx[2])}</h${atx[1].length}>\n`;
+        this.log(`識別 Markdown 標題為 <h${atx[1].length}>`);
+        first = false; continue;
+      }
+      // Setext headings
+      if (i + 1 < lines.length) {
+        const nx = lines[i+1].trim();
+        if (/^={3,}$/.test(nx)) { flush(); flushList(); html += `<h1>${esc(t)}</h1>\n`; i++; first=false; continue; }
+        if (/^-{3,}$/.test(nx)) { flush(); flushList(); html += `<h2>${esc(t)}</h2>\n`; i++; first=false; continue; }
+      }
+      // First line as h1
+      if (first && t.length < 80 && !/[.!?;]$/.test(t)) {
+        flush(); flushList();
+        html += `<h1>${esc(t)}</h1>\n`;
+        this.log('第一行識別為 <h1> 標題');
+        first = false; continue;
+      }
+      first = false;
+
+      // Unordered list
+      if (/^[-*•]\s+/.test(t)) {
+        flush();
+        if (inOl) { html += '</ol>\n'; inOl = false; }
+        if (!inUl) { html += '<ul>\n'; inUl = true; }
+        html += `  <li>${esc(t.replace(/^[-*•]\s+/, ''))}</li>\n`;
+        continue;
+      }
+      // Ordered list
+      if (/^\d+[.)]\s+/.test(t)) {
+        flush();
+        if (inUl) { html += '</ul>\n'; inUl = false; }
+        if (!inOl) { html += '<ol>\n'; inOl = true; }
+        html += `  <li>${esc(t.replace(/^\d+[.)]\s+/, ''))}</li>\n`;
+        continue;
+      }
+
+      flushList();
+      para.push(esc(t));
+    }
+    flush(); flushList();
+    return html;
+  }
+
+  // ── Serialize ─────────────────────────────────────────────────────────────
+  serialize(doc) {
+    return this.format('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+  }
+
+  format(html) {
+    const IND = '  ';
+    const VOID = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+    const INL  = new Set(['a','abbr','b','bdo','br','button','cite','code','dfn','em','i','img','input','kbd','label','output','q','s','samp','select','small','span','strong','sub','sup','textarea','time','u','var']);
+    let out = '', d = 0;
+
+    const tokens = html.split(/(<(?:!--[\s\S]*?--|[^>]+)>)/);
+    tokens.forEach(tok => {
+      if (!tok) return;
+      if (tok.startsWith('<!--')) { out += IND.repeat(d) + tok + '\n'; return; }
+      if (tok.startsWith('</')) {
+        const tag = (tok.match(/^<\/(\w+)/)||[])[1]?.toLowerCase();
+        if (tag && !INL.has(tag)) { d = Math.max(0, d-1); out += IND.repeat(d) + tok + '\n'; }
+        else { out = out.trimEnd() + tok + '\n'; }
+        return;
+      }
+      if (tok.startsWith('<')) {
+        const tag = (tok.match(/^<(\w+)/)||[])[1]?.toLowerCase();
+        if (!tag) { out += tok; return; }
+        if (INL.has(tag)) {
+          const last = out.split('\n').pop();
+          out = last.trim() ? out.trimEnd() + tok : out + IND.repeat(d) + tok;
+        } else {
+          out += IND.repeat(d) + tok + '\n';
+          if (!VOID.has(tag) && !tok.endsWith('/>') && !tok.endsWith('/ >')) d++;
+        }
+        return;
+      }
+      const text = tok.replace(/\s+/g,' ').trim();
+      if (!text) return;
+      if (out.endsWith('\n')) out += IND.repeat(d) + text;
+      else out += text;
+    });
+    return out.trim() + '\n';
+  }
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
