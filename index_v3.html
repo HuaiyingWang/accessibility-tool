@@ -36,14 +36,13 @@
       padding: 14px 24px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       position: sticky;
       top: 0;
       z-index: 100;
       box-shadow: 0 1px 4px rgba(0,0,0,.06);
     }
 
-    .logo { text-align: center; }
     .logo h1 { font-size: 1.1rem; font-weight: 700; }
     .logo p  { font-size: .72rem; color: var(--muted); margin-top: 1px; }
 
@@ -340,19 +339,10 @@
     <h1>無障礙內文潤飾工具</h1>
     <p>WCAG 2.1 自動清理與修復</p>
   </div>
-</header>
-
-<!-- ══ Main ══ -->
-<main>
-  <!-- 控制面板 (置中) -->
-  <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;background:var(--panel);padding:14px 24px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:4px;">
-    <div style="display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);padding-right:16px;">
-      <label style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;">頁面主體背景色</label>
-      <input type="color" id="page-bg-color" value="#ffffff" style="cursor:pointer; width:30px; height:30px; padding:0; border:none; border-radius:6px; outline:none;" title="設定發布頁面的預定背景色以計算對比">
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);padding-right:16px;">
-      <label style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;">頁面現有標題</label>
-      <select id="existing-headings" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:#fff;color:var(--text);cursor:pointer;outline:none;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <label style="font-size:.78rem;color:var(--muted);white-space:nowrap;">頁面現有標題</label>
+      <select id="existing-headings" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;background:#fff;color:var(--text);cursor:pointer;">
         <option value="none">無</option>
         <option value="h1">已有 h1</option>
         <option value="h1h2" selected>已有 h1 + h2</option>
@@ -364,7 +354,10 @@
       <button id="btn-aaa" onclick="setLevel('AAA')">AAA</button>
     </div>
   </div>
+</header>
 
+<!-- ══ Main ══ -->
+<main>
   <div class="panels">
 
     <!-- 輸入 -->
@@ -436,125 +429,6 @@ const WORKER_URL = 'https://weathered-boat-76be.love520297.workers.dev';
 
 let level = 'AA';
 let lastOutput = '';
-
-// ════════════════════════════════════════════
-//  顏色對比度精準運算工具 (JavaScript 色彩演算法)
-// ════════════════════════════════════════════
-function hexToRgb(hex) {
-  let c = hex.substring(1).split('');
-  if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-  c = '0x' + c.join('');
-  return [(c >> 16) & 255, (c >> 8) & 255, c & 255];
-}
-
-function parseColorToRgb(colorStr) {
-  if (!colorStr) return null;
-  colorStr = colorStr.trim();
-  if (colorStr.startsWith('#')) return hexToRgb(colorStr);
-  let rgbMatch = colorStr.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-  if (rgbMatch) return [parseInt(rgbMatch[1]), parseInt(rgbMatch[2]), parseInt(rgbMatch[3])];
-  if(colorStr === 'white') return [255,255,255];
-  if(colorStr === 'black') return [0,0,0];
-  return null;
-}
-
-function RgbToHex(r, g, b) {
-  return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase();
-}
-
-function getLuminance(r, g, b) {
-  let a = [r, g, b].map(function (v) {
-    v /= 255;
-    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-  });
-  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
-}
-
-function getContrastRatio(l1, l2) {
-  let lightest = Math.max(l1, l2);
-  let darkest = Math.min(l1, l2);
-  return (lightest + 0.05) / (darkest + 0.05);
-}
-
-function getTargetRatio(fontSizeStr, fontWeightStr, level) {
-  let isLarge = false;
-  let pt = 12; 
-  if (fontSizeStr) {
-    let matchPx = fontSizeStr.match(/(\d+(?:\.\d+)?)px/i);
-    let matchPt = fontSizeStr.match(/(\d+(?:\.\d+)?)pt/i);
-    if (matchPx) pt = parseFloat(matchPx[1]) * 0.75;
-    if (matchPt) pt = parseFloat(matchPt[1]);
-  }
-  let isBold = fontWeightStr && (fontWeightStr === 'bold' || parseInt(fontWeightStr) >= 700);
-  if (pt >= 18 || (pt >= 14 && isBold)) isLarge = true;
-  if (level === 'AAA') return isLarge ? 4.5 : 7.0;
-  return isLarge ? 3.0 : 4.5;
-}
-
-function adjustColorForContrast(rgbText, rgbBg, targetRatio) {
-  let bgLum = getLuminance(...rgbBg);
-  let textLum = getLuminance(...rgbText);
-  let ratio = getContrastRatio(textLum, bgLum);
-  if (ratio >= targetRatio) return { rgb: rgbText, adjusted: false };
-  
-  let isBgLight = bgLum > 0.5;
-  let [r, g, b] = rgbText;
-  let step = 2; 
-  
-  let loopCount = 0;
-  while (ratio < targetRatio && loopCount < 100) {
-    if (isBgLight) {
-      r = Math.max(0, r - step);
-      g = Math.max(0, g - step);
-      b = Math.max(0, b - step);
-    } else {
-      r = Math.min(255, r + step);
-      g = Math.min(255, g + step);
-      b = Math.min(255, b + step);
-    }
-    textLum = getLuminance(r, g, b);
-    ratio = getContrastRatio(textLum, bgLum);
-    loopCount++;
-    if ((r===0 && g===0 && b===0) || (r===255 && g===255 && b===255)) break;
-  }
-  return { rgb: [r, g, b], adjusted: true };
-}
-
-function processHTMLContrast(htmlStr, pageBgHex, wcagLevel) {
-  // 防呆：如果是空的就跳過
-  if (!htmlStr || !htmlStr.trim()) return { html: htmlStr, count: 0 };
-  
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlStr, 'text/html');
-  const pageBgRgb = hexToRgb(pageBgHex);
-  let changeCount = 0;
-
-  function checkNode(node, currentBgRgb) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      let nodeBgRgb = currentBgRgb;
-      let styleBg = node.style?.backgroundColor || node.style?.background;
-      let parsedBg = parseColorToRgb(styleBg);
-      if (parsedBg) nodeBgRgb = parsedBg;
-
-      let styleColor = node.style?.color;
-      if (styleColor) {
-         let parsedColor = parseColorToRgb(styleColor);
-         if (parsedColor) {
-           let targetRatio = getTargetRatio(node.style?.fontSize, node.style?.fontWeight, wcagLevel);
-           let result = adjustColorForContrast(parsedColor, nodeBgRgb, targetRatio);
-           if (result.adjusted) {
-             node.style.color = RgbToHex(...result.rgb);
-             changeCount++;
-           }
-         }
-      }
-      for (let child of node.childNodes) checkNode(child, nodeBgRgb);
-    }
-  }
-  
-  for (let child of doc.body.childNodes) checkNode(child, pageBgRgb);
-  return { html: doc.body.innerHTML, count: changeCount };
-}
 
 function getHeadingInstruction() {
   const v = document.getElementById('existing-headings').value;
@@ -631,8 +505,6 @@ async function run() {
   btn.disabled = true;
   btn.innerHTML = `<div class="spinner" style="width:15px;height:15px;border-width:2px;margin:0"></div> 處理中...`;
 
-  const bgColor = document.getElementById('page-bg-color').value;
-
   document.getElementById('output').innerHTML =
     `<div class="loading"><div class="spinner"></div><p>正在分析並修復...</p></div>`;
   document.getElementById('report').style.display = 'none';
@@ -648,8 +520,8 @@ async function run() {
 4. 清理排版：超過 2 個連續 <br> 只保留 1 個，移除段落開頭或排版濫用的 &nbsp;。
 
 【第二步：樣式處理（包含 HTML 內的 style 屬性與獨立的 <style> 標籤）】
-1. 獨立 <style> 標籤：必須完整保留。已知發布頁面的主背景色為 ${bgColor}。請自動排版美化 CSS 語法。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請結合背景色判斷並修復，記錄於 changes。
-2. 行內樣式（style="..."）：判斷其是否有實質意義。已知外層背景色預設為 ${bgColor}，若為無意義字型宣告則盡量移除。若發現行內文字顏色 (color) 與背景色的對比有閱讀困難風險，請直接移除該色彩設定讓文字自然繼承安全色。
+1. 獨立 <style> 標籤：必須完整保留。請自動排版美化 CSS 語法。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請修復並記錄於 changes。
+2. 行內樣式（style="..."）：判斷其是否有實質意義。若為無意義字型宣告、會破壞無障礙（如對比度過低）的樣式請移除；若屬有意義之排版樣式予以保留。
 
 【第三步：無障礙與語意化修復（WCAG 2.1 ${level}）】
 1. 標題與大綱優化：${getHeadingInstruction()} 若原始「具有大字體設計感的標題」被迫調整層級，可使用合理的 style 保留其視覺大小；若是利用粗體 <p> 偽裝的標題，請轉換為正確的標題標籤 <hX>，既保有設計感又符合規範。
@@ -697,18 +569,7 @@ async function run() {
     if (!jsonMatch) throw new Error('回應格式異常，請重試');
     const result = JSON.parse(jsonMatch[0]);
 
-    // JS 前端對比度運算精準攔截
-    const postProcess = processHTMLContrast(result.html || '', bgColor, level);
-    lastOutput = postProcess.html;
-
-    let finalChanges = result.changes || [];
-    if (postProcess.count > 0) {
-      finalChanges.push({
-        type: 'fix',
-        description: `利用色彩演算法動態深淺校正，調整了 ${postProcess.count} 處行內樣式色彩對比度，準確滿足 WCAG ${level} 標準。`,
-        wcag: (level === 'AAA' ? '1.4.6' : '1.4.3')
-      });
-    }
+    lastOutput = result.html || '';
 
     // 語法高亮顯示
     const escaped = lastOutput
@@ -722,7 +583,7 @@ async function run() {
       document.getElementById(id).style.display = 'inline-flex');
 
     // 建立報告
-    buildReport(finalChanges);
+    buildReport(result.changes || []);
 
   } catch (err) {
     document.getElementById('output').innerHTML =
