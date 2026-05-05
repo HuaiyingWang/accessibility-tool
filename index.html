@@ -72,6 +72,53 @@
       box-shadow: 0 1px 4px rgba(37,99,235,.35);
     }
 
+    /* ── Control Bar ── */
+    .control-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      padding: 14px 24px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-right: 1px solid var(--border);
+      padding-right: 16px;
+    }
+    .control-group:last-child { border-right: none; padding-right: 0; }
+    .control-label {
+      font-size: .8rem;
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .control-bar select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .85rem;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      outline: none;
+    }
+    input[type="color"] {
+      cursor: pointer;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      outline: none;
+    }
+
     /* ── Layout ── */
     main {
       max-width: 1440px;
@@ -345,23 +392,25 @@
 <!-- ══ Main ══ -->
 <main>
   <!-- 控制面板 (置中) -->
-  <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;background:var(--panel);padding:14px 24px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:4px;">
-    <div style="display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);padding-right:16px;">
-      <label style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;">頁面主體背景色</label>
-      <input type="color" id="page-bg-color" value="#ffffff" style="cursor:pointer; width:30px; height:30px; padding:0; border:none; border-radius:6px; outline:none;" title="設定發布頁面的預定背景色以計算對比">
+  <div class="control-bar">
+    <div class="control-group">
+      <label class="control-label" for="page-bg-color">頁面主體背景色</label>
+      <input type="color" id="page-bg-color" value="#ffffff" title="設定發布頁面的預定背景色以計算對比">
     </div>
-    <div style="display:flex;align-items:center;gap:8px;border-right:1px solid var(--border);padding-right:16px;">
-      <label style="font-size:.8rem;color:var(--text);font-weight:600;white-space:nowrap;">頁面現有標題</label>
-      <select id="existing-headings" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:#fff;color:var(--text);cursor:pointer;outline:none;">
+    <div class="control-group">
+      <label class="control-label" for="existing-headings">頁面現有標題</label>
+      <select id="existing-headings">
         <option value="none">無</option>
         <option value="h1">已有 h1</option>
         <option value="h1h2" selected>已有 h1 + h2</option>
         <option value="h1h2h3">已有 h1 + h2 + h3</option>
       </select>
     </div>
-    <div class="level-toggle">
-      <button id="btn-aa"  onclick="setLevel('AA')"  class="active">AA</button>
-      <button id="btn-aaa" onclick="setLevel('AAA')">AAA</button>
+    <div class="control-group">
+      <div class="level-toggle">
+        <button id="btn-aa"  onclick="setLevel('AA')"  class="active">AA</button>
+        <button id="btn-aaa" onclick="setLevel('AAA')">AAA</button>
+      </div>
     </div>
   </div>
 
@@ -647,9 +696,24 @@ async function run() {
 3. 移除空白標籤：清空內容只含空白或 &nbsp; 的 <p>、<span>、<div>。
 4. 清理排版：超過 2 個連續 <br> 只保留 1 個，移除段落開頭或排版濫用的 &nbsp;。
 
-【第二步：樣式處理（包含 HTML 內的 style 屬性與獨立的 <style> 標籤）】
-1. 獨立 <style> 標籤：必須完整保留。已知發布頁面的主背景色為 ${bgColor}。請自動排版美化 CSS 語法。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請結合背景色判斷並修復，記錄於 changes。
-2. 行內樣式（style="..."）：判斷其是否有實質意義。已知外層背景色預設為 ${bgColor}，若為無意義字型宣告則盡量移除。若發現行內文字顏色 (color) 與背景色的對比有閱讀困難風險，請直接移除該色彩設定讓文字自然繼承安全色。
+【第二步：樣式處理與 UI UX Pro Max 設計升級】
+已知發布頁面的主背景色為 ${bgColor}。
+
+1. 獨立 <style> 標籤：必須完整保留並美化排版。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請結合背景色修復，記錄於 changes。
+
+2. 行內樣式（style="..."）：若為無意義字型宣告則移除；若行內文字顏色與背景對比有閱讀困難風險，請移除該色彩讓文字繼承安全色。
+
+3. 【UI UX Pro Max 內容設計升級】：在保持內容結構不變的前提下，依以下規範全面升級視覺呈現：
+   - 版面架構：為標題、段落、清單、表格、區塊等元素建立清晰的視覺層次，善用 padding/margin/line-height 建立呼吸感。
+   - 色彩系統：移除雜亂的行內色彩，改用統一的專業配色（主文 #1e293b、副文 #64748b、強調色 #2563eb，均需符合 WCAG ${level} 對比規範）。
+   - 標題樣式：h2 使用 border-left 色塊或 border-bottom 底線強化視覺識別，h3 以粗體+字母間距處理。
+   - 段落與清單：段落 line-height 1.8；清單項目 padding-left 1.5em、li margin-bottom 0.5em；移除手動編號，改為語意化 ol/ul。
+   - 強調與引用：<strong> 改用帶底色的 highlight 樣式；需要特別標示的資訊區塊使用 border-left + 淡背景色的 callout 設計。
+   - 表格美化：加上 border-collapse、交替行底色、thead 底色與粗體，欄寬合理分配。
+   - 圖片：加上 border-radius: 8px、box-shadow 輕陰影與 max-width: 100%。
+   - RWD：所有固定像素寬度改為 max-width 或百分比；行動端字體不小於 14px。
+
+4. 【CSS 整合輸出規則（CKEditor 貼入優化）】：將所有行內 style 屬性中可複用的樣式，以及原始 <style> 標籤內容，統一整理成**一個 <style> 區塊**，放在輸出 HTML 的**最上方**。原本行內 style 改為引用 class 名稱，讓整份 HTML 乾淨易讀。使用者可直接將完整輸出貼入 CKEditor 原始碼編輯位置，CSS 與 HTML 一目了然。
 
 【第三步：無障礙與語意化修復（WCAG 2.1 ${level}）】
 1. 標題與大綱優化：${getHeadingInstruction()} 若原始「具有大字體設計感的標題」被迫調整層級，可使用合理的 style 保留其視覺大小；若是利用粗體 <p> 偽裝的標題，請轉換為正確的標題標籤 <hX>，既保有設計感又符合規範。
