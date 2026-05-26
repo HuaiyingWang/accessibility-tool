@@ -377,6 +377,30 @@
       main { padding: 16px; }
       .shortcut-hint { display: none; }
     }
+
+    /* ── Output Tabs ── */
+    .panel-head-left { display: flex; align-items: center; gap: 12px; }
+    .output-tabs { display: flex; gap: 4px; }
+    .tab-btn {
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .tab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    #preview-frame {
+      flex: 1;
+      border: none;
+      width: 100%;
+      min-height: 480px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -385,7 +409,7 @@
 <header>
   <div class="logo">
     <h1>無障礙內文潤飾工具</h1>
-    <p>WCAG 2.1 自動清理與修復</p>
+    <p>WCAG 2.2 AAA 自動清理與修復</p>
   </div>
 </header>
 
@@ -398,18 +422,9 @@
       <input type="color" id="page-bg-color" value="#ffffff" title="設定發布頁面的預定背景色以計算對比">
     </div>
     <div class="control-group">
-      <label class="control-label" for="existing-headings">頁面現有標題</label>
-      <select id="existing-headings">
-        <option value="none">無</option>
-        <option value="h1">已有 h1</option>
-        <option value="h1h2" selected>已有 h1 + h2</option>
-        <option value="h1h2h3">已有 h1 + h2 + h3</option>
-      </select>
-    </div>
-    <div class="control-group">
       <div class="level-toggle">
-        <button id="btn-aa"  onclick="setLevel('AA')"  class="active">AA</button>
-        <button id="btn-aaa" onclick="setLevel('AAA')">AAA</button>
+        <button id="btn-aa"  onclick="setLevel('AA')">AA</button>
+        <button id="btn-aaa" onclick="setLevel('AAA')" class="active">AAA</button>
       </div>
     </div>
   </div>
@@ -443,7 +458,13 @@
     <!-- 輸出 -->
     <div class="panel">
       <div class="panel-head">
-        <h2>修復結果</h2>
+        <div class="panel-head-left">
+          <h2>修復結果</h2>
+          <div class="output-tabs" role="tablist" aria-label="輸出檢視模式">
+            <button type="button" class="tab-btn active" id="tab-code" role="tab" aria-selected="true" onclick="showTab('code')">原始碼</button>
+            <button type="button" class="tab-btn" id="tab-preview" role="tab" aria-selected="false" onclick="showTab('preview')">預覽</button>
+          </div>
+        </div>
         <div class="panel-actions">
           <button class="btn-sm" id="btn-reuse"    onclick="reuse()"    style="display:none">← 送回輸入</button>
           <button class="btn-sm" id="btn-copy"     onclick="copyHTML()" style="display:none">複製</button>
@@ -460,6 +481,7 @@
           修復後的 HTML 將顯示在這裡
         </div>
       </div>
+      <iframe id="preview-frame" sandbox="allow-same-origin" title="修復後 HTML 靜態預覽"></iframe>
     </div>
   </div>
 
@@ -483,8 +505,24 @@
 const WORKER_URL = 'https://weathered-boat-76be.love520297.workers.dev';
 // ════════════════════════════════════════════
 
-let level = 'AA';
+let level = 'AAA';
 let lastOutput = '';
+let currentTab = 'code';
+
+function showTab(tab) {
+  currentTab = tab;
+  const codeEl  = document.getElementById('output');
+  const frameEl = document.getElementById('preview-frame');
+  const tabCode = document.getElementById('tab-code');
+  const tabPrev = document.getElementById('tab-preview');
+  const isPreview = tab === 'preview';
+  codeEl.style.display  = isPreview ? 'none' : '';
+  frameEl.style.display = isPreview ? 'block' : 'none';
+  tabCode.classList.toggle('active', !isPreview);
+  tabPrev.classList.toggle('active',  isPreview);
+  tabCode.setAttribute('aria-selected', String(!isPreview));
+  tabPrev.setAttribute('aria-selected', String(isPreview));
+}
 
 // ════════════════════════════════════════════
 //  顏色對比度精準運算工具 (JavaScript 色彩演算法)
@@ -605,16 +643,6 @@ function processHTMLContrast(htmlStr, pageBgHex, wcagLevel) {
   return { html: doc.body.innerHTML, count: changeCount };
 }
 
-function getHeadingInstruction() {
-  const v = document.getElementById('existing-headings').value;
-  const map = {
-    none:   '標題層級無限制，修正時確保不跳層即可。',
-    h1:     '頁面已有 h1，內容中最高標題只能使用 h2，不可出現 h1。',
-    h1h2:   '頁面已有 h1 和 h2，內容中最高標題只能使用 h3，不可出現 h1 或 h2。',
-    h1h2h3: '頁面已有 h1、h2、h3，內容中最高標題只能使用 h4，不可出現 h1、h2 或 h3。'
-  };
-  return map[v];
-}
 function setLevel(v) {
   level = v;
   document.getElementById('btn-aa').classList.toggle('active',  v === 'AA');
@@ -648,6 +676,8 @@ function resetOutput() {
       </svg>
       修復後的 HTML 將顯示在這裡
     </div>`;
+  document.getElementById('preview-frame').srcdoc = '';
+  showTab('code');
   ['btn-copy','btn-download','btn-reuse'].forEach(id =>
     document.getElementById(id).style.display = 'none');
   document.getElementById('report').style.display = 'none';
@@ -691,45 +721,106 @@ async function run() {
   ['btn-copy','btn-download','btn-reuse'].forEach(id =>
     document.getElementById(id).style.display = 'none');
 
-  const systemPrompt = `你是一位專業的 HTML/CSS 無障礙工程師。請清理並修復以下 HTML 與 CSS，使其符合 WCAG 2.1 ${level} 標準。
+  const systemPrompt = `你是一位頂尖的前端開發者兼 UI 設計師，精通平衡嚴格的 WCAG 2.2 ${level} 無障礙規範與 UI UX Pro Max 的現代設計美學。
 
-【第一步：清理垃圾內容與結構優化】
-1. 移除 Microsoft Word 與 Google Docs 殘留標籤：mso-*、docs-internal-guid-*、<o:p>、xml 宣告、與工具殘留的無語意 class (如 MsoNormal)。
-2. 清理多餘節點與字體：合併或移除雜亂且無意義的多層次 <span> 標籤嵌套。強制移除如 'Comic Sans MS' 等不專業且干擾閱讀的字體設定。
-3. 移除空白標籤：清空內容只含空白或 &nbsp; 的 <p>、<span>、<div>。
-4. 清理排版：超過 2 個連續 <br> 只保留 1 個，移除段落開頭或排版濫用的 &nbsp;。
+## 核心目標
+將輸入內容轉化為：
+- 符合 WCAG 2.2 ${level} 標準的無障礙結構（${level === 'AAA' ? '對比比例需達 7:1' : '對比比例需達 4.5:1 一般 / 3:1 大字'}）
+- 視覺整潔且易於閱讀的原始碼
+- 從 h3 開始且不跨級的清晰標題層次
+- 所有 CSS 樣式集中於 <style> 區塊，置於輸出最上方
 
-【第二步：樣式處理與 UI UX Pro Max 設計升級】
-已知發布頁面的主背景色為 ${bgColor}。
+---
 
-1. 獨立 <style> 標籤：必須完整保留並美化排版。若發現色彩對比度不足（未達 WCAG ${level}）或缺少焦點樣式（如 outline: none 卻無 :focus），請結合背景色修復，記錄於 changes。
+## 第一部分：前置清理
 
-2. 行內樣式（style="..."）：若為無意義字型宣告則移除；若行內文字顏色與背景對比有閱讀困難風險，請移除該色彩讓文字繼承安全色。
+移除 Microsoft Word / Google Docs 殘留標籤（mso-*、docs-internal-guid-*、<o:p>、MsoNormal class）。
+清理多餘 <span> 巢套、移除 Comic Sans MS 等不適合閱讀的字體宣告。
+移除僅含空白或 &nbsp; 的空標籤；超過 2 個連續 <br> 只保留 1 個。
 
-3. 【UI UX Pro Max 內容設計升級】：在保持內容結構不變的前提下，依以下規範全面升級視覺呈現：
-   - 版面架構：為標題、段落、清單、表格、區塊等元素建立清晰的視覺層次，善用 padding/margin/line-height 建立呼吸感。
-   - 色彩系統：移除雜亂的行內色彩，改用統一的專業配色（主文 #1e293b、副文 #64748b、強調色 #2563eb，均需符合 WCAG ${level} 對比規範）。
-   - 標題樣式：h2 使用 border-left 色塊或 border-bottom 底線強化視覺識別，h3 以粗體+字母間距處理。
-   - 段落與清單：段落 line-height 1.8；清單項目 padding-left 1.5em、li margin-bottom 0.5em；移除手動編號，改為語意化 ol/ul。
-   - 強調與引用：<strong> 改用帶底色的 highlight 樣式；需要特別標示的資訊區塊使用 border-left + 淡背景色的 callout 設計。
-   - 表格美化：加上 border-collapse、交替行底色、thead 底色與粗體，欄寬合理分配。
-   - 圖片：加上 border-radius: 8px、box-shadow 輕陰影與 max-width: 100%。
-   - RWD：所有固定像素寬度改為 max-width 或百分比；行動端字體不小於 14px。
+---
 
-4. 【CSS 整合輸出規則（CKEditor 貼入優化）】：將所有行內 style 屬性中可複用的樣式，以及原始 <style> 標籤內容，統一整理成**一個 <style> 區塊**，放在輸出 HTML 的**最上方**。原本行內 style 改為引用 class 名稱，讓整份 HTML 乾淨易讀。使用者可直接將完整輸出貼入 CKEditor 原始碼編輯位置，CSS 與 HTML 一目了然。
+## 第二部分：強制對比度
 
-【第三步：無障礙與語意化修復（WCAG 2.1 ${level}）】
-1. 標題與大綱優化：${getHeadingInstruction()} 若原始「具有大字體設計感的標題」被迫調整層級，可使用合理的 style 保留其視覺大小；若是利用粗體 <p> 偽裝的標題，請轉換為正確的標題標籤 <hX>，既保有設計感又符合規範。
-2. 語意化清單：將手動輸入編號的段落（如 1. 2. 3. 等）自動轉換為語意化的 <ol> 標籤與 <li> 標籤；項目符號轉為 <ul>，讓報讀系統能正確識別清單。
-3. 無障礙連結補強：<a> 的連結若為「點此」等無意義文字，請標記需人工修改。如果是外部或開啟新視窗連結，請強制補齊 target="_blank"、rel="noopener noreferrer" 與合適的 title 語音提示。
-4. 圖片與行動端 RWD 處理：移除 <img>、<p>、<div> 等元素寫死的固定寬度（如 width: XXpx），改用百分比或 max-width 以提升手機端可讀性。<img> 加上 style="max-width: 100%; height: auto;" 防失真並推論補填 alt。
-5. 表格與 <iframe>：<table> 必須補上 <th scope="col"> 或 <th scope="row">；為了避免行動端表格破版，請自動在 <table> 外層包覆 <div style="overflow-x: auto;">。iframe 推測補上 title。
-6. 表單與其他：將 tabindex 大於 0 的值移除或改為 0；確保 <button> 有可見文字或 aria-label。
+所有顏色相關 CSS 屬性（color、background-color、border-color）必須全面加上 !important，嚴防外部樣式覆寫。
+互動元件（按鈕、連結）顏色必須達到 WCAG ${level} 對比標準。
+成功範例：白色文字 (#FFFFFF) 搭配深色背景（深石墨、深灰、黑色）。
+嚴禁：深橙色背景搭配灰色文字。
 
-請只回傳以下格式，不要加任何其他說明或文字（HTML 區塊直接輸出原始碼，無需任何跳脫）：
+---
+
+## 第三部分：結構與語意規範
+
+1. 版面：所有 Wrapper / Container 使用 width: 100% !important;，嚴禁 max-width。
+2. 標題層次：固定從 <h3> 開始，嚴格遞增（h3 → h4 → h5），嚴禁跨級。若原始為粗體 <p> 偽裝的標題，轉換為正確 <hX> 標籤。
+3. 語意標籤：嚴禁用 div/span 模擬互動元件，必須用原生 <button> 或 <a>。
+4. ARIA 標註：為所有有意義的元件添加 role 與 aria-* 屬性（aria-expanded、aria-label 等）。
+5. 超連結：嚴禁裸露 URL；外部或開啟新視窗連結補齊 target="_blank" rel="noopener noreferrer"；下載連結需加 title 與 aria-label 說明。
+6. 圖片：嚴禁修改原始 src 路徑；alt 為空時依內容填補；固定像素寬高改為 max-width: 100%; height: auto;。
+7. 文件下載連結：若頁面含文件下載連結，依以下規則強制補充雙格式無障礙說明：
+   - Word 文件 → 同時提供 DOCX + ODT
+   - Excel 試算表 → 同時提供 XLSX + ODS
+   - PDF（閱讀用，如公告、簡章） → 僅需單一 PDF
+   - PDF（填寫用，如申請書、表單） → 強制提供 PDF + 可編輯格式 (ODT/ODS)
+   每個下載連結必須有獨立且明確的 aria-label 與 title，精確標註該連結的實體檔案格式。
+8. 語意化清單：將手動輸入編號的段落（如 1. 2. 3.）自動轉為 <ol><li>；項目符號轉為 <ul><li>。
+9. 表格與 iframe：<table> 補上 <th scope="col"> 或 <th scope="row"> 與 <caption>；iframe 補上 title。
+10. 內容完整性：必須完整保留所有文字內容與資訊架構，嚴禁刪減或竄改原始文字。
+
+---
+
+## 第四部分：UI UX Pro Max 視覺美學系統
+
+### 智慧型色彩變數
+依內容主題生成符合對比標準的 CSS 變數，以 :root {} 包覆（頁面主背景色參考：${bgColor}）：
+- --bg-body：頁面/容器背景，配合主背景色 ${bgColor}
+- --bg-card：卡片背景，略深或略淺於 --bg-body
+- --text-primary：主要文字，需與背景達到 WCAG ${level}
+- --text-secondary：次要文字
+- --color-primary：強調/連結色，強制深色調，確保與白字 (#FFFFFF) 達到 WCAG ${level}
+
+### 卡片化佈局
+內容區塊包裹在卡片容器內，套用：background-color: var(--bg-body) !important; margin-bottom: 24px;
+（不強制圓角，保持保守幾何線條）
+
+### 字體排版
+- 全面禁用 font-weight: bold，改用數值
+- 標題：font-weight: 600; letter-spacing: 0.025em; line-height: 1.6;
+- 內文：font-weight: 400;
+
+### 按鈕元件
+- 主要按鈕：background: var(--color-primary); color: #FFFFFF !important;（確保 WCAG ${level} 對比）
+- 次要按鈕：background: #FFFFFF; color: var(--text-primary) !important; 加深色邊框
+- 選擇器綁定 HTML 標籤提高權重，範例：a.a11y-btn, button.a11y-btn
+- 用排除選擇器隔離一般連結樣式，範例：.a11y-container a:not(.a11y-btn)
+
+### 表格規範
+- 完整語意：<table> <caption> <thead> <tbody> <th scope="col/row"> <td>
+- 版型：table-layout: fixed; width: 100%;
+- 禁用粗體；表頭用高對比背景色塊
+- 多欄複雜表格必須加橫向滑動容器（role="region" aria-label="可橫向滑動查看完整表格" tabindex="0"，overflow-x:auto）
+
+### 清單規範
+- <ul>：list-style-type: disc !important;
+- <ol>：list-style-type: decimal !important;
+- 嚴禁 list-style: none
+- <li>：margin-bottom: 12px !important; padding-left: 8px !important;
+- 清單整體：padding-left: 24px !important;
+
+---
+
+## 第五部分：輸出規範
+
+1. 嚴禁 HTML 標籤內的 inline style，所有樣式統一移入 <style> 區塊
+2. <style> 置於輸出 HTML 最上方
+3. 所有 CSS 宣告必須加上 !important
+4. 選擇器權重需精確計算，避免衝突
+5. 嚴禁輸出任何引用標記（如 [cite] 或 ^1^）
+
+請只回傳以下格式，不要加任何其他說明或文字（HTML 直接輸出原始碼，無需跳脫）：
 
 ===HTML_START===
-（修復後的完整 HTML 原始碼）
+（修復後的完整 HTML 原始碼，<style> 區塊置於最上方）
 ===HTML_END===
 ===CHANGES_START===
 [
@@ -806,6 +897,9 @@ async function run() {
     document.getElementById('output').innerHTML =
       `<pre><code class="language-html">${escaped}</code></pre>`;
     hljs.highlightAll();
+
+    // 更新預覽 iframe
+    document.getElementById('preview-frame').srcdoc = lastOutput;
 
     // 顯示操作按鈕
     ['btn-copy','btn-download','btn-reuse'].forEach(id =>
