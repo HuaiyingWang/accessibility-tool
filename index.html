@@ -759,7 +759,33 @@ async function run() {
     // 解析 JSON（容忍 Claude 偶爾加多餘文字）
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('回應格式異常，請重試');
-    const result = JSON.parse(jsonMatch[0]);
+
+    let result;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      // 逐字元修復：將字串值內的未轉義換行／Tab 補上轉義符
+      let fixed = '';
+      let inString = false;
+      let escaped = false;
+      const raw = jsonMatch[0];
+      for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        if (escaped) { fixed += ch; escaped = false; continue; }
+        if (ch === '\\') { escaped = true; fixed += ch; continue; }
+        if (ch === '"') { inString = !inString; fixed += ch; continue; }
+        if (inString) {
+          if (ch === '\n' || ch === '\r') { fixed += '\\n'; continue; }
+          if (ch === '\t') { fixed += '\\t'; continue; }
+        }
+        fixed += ch;
+      }
+      try {
+        result = JSON.parse(fixed);
+      } catch (e2) {
+        throw new Error('JSON 解析失敗，請縮短輸入後重試。（' + e2.message + '）');
+      }
+    }
 
     // JS 前端對比度運算精準攔截
     const postProcess = processHTMLContrast(result.html || '', bgColor, level);
