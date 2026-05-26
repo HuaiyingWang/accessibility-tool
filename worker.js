@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker - Claude API Proxy
+ * Cloudflare Worker - Claude API Proxy (Streaming)
  *
  * 部署步驟：
  * 1. 至 https://dash.cloudflare.com → Workers & Pages → Create Worker
@@ -16,6 +16,7 @@ export default {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Expose-Headers': 'Content-Type',
     };
 
     // Handle preflight
@@ -29,6 +30,7 @@ export default {
 
     try {
       const body = await request.json();
+      body.stream = true; // 強制串流，避免 30 秒 timeout
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -40,22 +42,28 @@ export default {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      // Anthropic 回傳非 2xx 時，把錯誤訊息原封不動回傳給前端
+      if (!response.ok) {
+        const errText = await response.text();
+        return new Response(errText, {
+          status: response.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
-      return new Response(JSON.stringify(data), {
-        status: response.status,
+      // 直接管道串流，不緩衝，突破 30 秒限制
+      return new Response(response.body, {
+        status: 200,
         headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
         },
       });
     } catch (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
   },

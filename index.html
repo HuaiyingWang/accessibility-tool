@@ -401,6 +401,17 @@
       min-height: 480px;
       display: none;
     }
+    .streaming-indicator {
+      padding: 2.5rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: .9rem;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .35; }
+    }
   </style>
 </head>
 <body>
@@ -844,24 +855,40 @@ async function run() {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      if (errText.includes('524') || res.status === 524) {
-        throw new Error('請求逾時（Cloudflare 524）：輸入內容過長，AI 來不及在 30 秒內回應。請將內容分段，每次貼入 4,000～6,000 字元以內。');
-      }
       let errBody = {};
       try { errBody = JSON.parse(errText); } catch (_) {}
-      const msg = errBody?.error?.message || errText || `HTTP ${res.status}`;
-      if (msg.includes('524')) throw new Error('請求逾時：輸入內容過長，請分段處理（每次 ≤ 6,000 字元）。');
-      throw new Error(`伺服器錯誤 ${res.status}：${msg}`);
+      throw new Error(`伺服器錯誤 ${res.status}：${errBody?.error?.message || errText || `HTTP ${res.status}`}`);
     }
 
-    const data = await res.json();
-    if (data.error) {
-      const msg = data.error.message || JSON.stringify(data.error);
-      if (msg.includes('524')) throw new Error('請求逾時：輸入內容過長，請分段處理（每次 ≤ 6,000 字元）。');
-      throw new Error(msg);
+    // SSE 串流讀取
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+    let fullText  = '';
+
+    document.getElementById('output').innerHTML =
+      '<div class="streaming-indicator">⚡ AI 生成中，請稍候...</div>';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop(); // 保留未完整的最後一行
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === '[DONE]') continue;
+        let evt;
+        try { evt = JSON.parse(raw); } catch (_) { continue; }
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+          fullText += evt.delta.text;
+        }
+        if (evt.type === 'error') throw new Error(evt.error?.message || 'API 串流錯誤');
+      }
     }
 
-    const text = data.content?.[0]?.text;
+    const text = fullText;
     if (!text) throw new Error('回應內容為空，請重試');
 
     // 用分隔符解析回應（避免 JSON 轉義問題）
