@@ -764,16 +764,34 @@ async function run() {
     try {
       result = JSON.parse(jsonMatch[0]);
     } catch (e) {
-      // 逐字元修復：將字串值內的未轉義換行／Tab 補上轉義符
+      // 逐字元修復：處理未轉義的換行符及 HTML 屬性雙引號
+      // 判斷引號是否真的結束字串：往後看下一個非空白字元，若不是 JSON 合法接續符號，代表是 HTML 屬性引號
+      const raw = jsonMatch[0];
       let fixed = '';
       let inString = false;
       let escaped = false;
-      const raw = jsonMatch[0];
       for (let i = 0; i < raw.length; i++) {
         const ch = raw[i];
         if (escaped) { fixed += ch; escaped = false; continue; }
         if (ch === '\\') { escaped = true; fixed += ch; continue; }
-        if (ch === '"') { inString = !inString; fixed += ch; continue; }
+        if (ch === '"') {
+          if (!inString) {
+            inString = true;
+            fixed += ch;
+          } else {
+            // 往後掃第一個非空白字元
+            let j = i + 1;
+            while (j < raw.length && ' \t\r\n'.includes(raw[j])) j++;
+            const next = raw[j];
+            if (!next || ',}]:'.includes(next)) {
+              inString = false; // 合法字串結尾
+              fixed += ch;
+            } else {
+              fixed += '\\"'; // HTML 屬性引號，補轉義
+            }
+          }
+          continue;
+        }
         if (inString) {
           if (ch === '\n' || ch === '\r') { fixed += '\\n'; continue; }
           if (ch === '\t') { fixed += '\\t'; continue; }
@@ -783,7 +801,16 @@ async function run() {
       try {
         result = JSON.parse(fixed);
       } catch (e2) {
-        throw new Error('JSON 解析失敗，請縮短輸入後重試。（' + e2.message + '）');
+        // 最後手段：用正則直接抽出 html 欄位，changes 設為空
+        const htmlOnly = raw.match(/"html"\s*:\s*"([\s\S]+?)"\s*(?:,\s*"changes"|$)/);
+        if (htmlOnly) {
+          const html = htmlOnly[1]
+            .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+            .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          result = { html, changes: [{ type: 'warning', description: '回應格式不完整，changes 資訊已略過，HTML 內容已盡力回復。' }] };
+        } else {
+          throw new Error('無法解析 AI 回應，請縮短輸入後重試。');
+        }
       }
     }
 
