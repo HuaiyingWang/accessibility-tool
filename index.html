@@ -723,15 +723,18 @@ async function run() {
 5. 表格與 <iframe>：<table> 必須補上 <th scope="col"> 或 <th scope="row">；為了避免行動端表格破版，請自動在 <table> 外層包覆 <div style="overflow-x: auto;">。iframe 推測補上 title。
 6. 表單與其他：將 tabindex 大於 0 的值移除或改為 0；確保 <button> 有可見文字或 aria-label。
 
-請只回傳以下 JSON 格式，不要加任何內文說明（【重要】確保回傳的是嚴格合法的 JSON，"html" 欄位值若有雙引號請轉義，且所有換行符號必須轉義為 \\n，不可出現未轉義的換行！）：
-{
-  "html": "修復後的完整 HTML",
-  "changes": [
-    { "type": "clean", "description": "說明清理了什麼" },
-    { "type": "fix",   "description": "說明修復了什麼", "wcag": "WCAG 條款編號" },
-    { "type": "warning", "description": "需人工確認的項目" }
-  ]
-}`;
+請只回傳以下格式，不要加任何其他說明或文字（HTML 區塊直接輸出原始碼，無需任何跳脫）：
+
+===HTML_START===
+（修復後的完整 HTML 原始碼）
+===HTML_END===
+===CHANGES_START===
+[
+  { "type": "clean", "description": "說明清理了什麼" },
+  { "type": "fix",   "description": "說明修復了什麼", "wcag": "WCAG 條款編號" },
+  { "type": "warning", "description": "需人工確認的項目" }
+]
+===CHANGES_END===`;
 
   try {
     const res = await fetch(WORKER_URL, {
@@ -739,7 +742,7 @@ async function run() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 8192,
+        max_tokens: 16000,
         system: systemPrompt,
         messages: [{ role: 'user', content: input }]
       })
@@ -756,63 +759,19 @@ async function run() {
     const text = data.content?.[0]?.text;
     if (!text) throw new Error('回應內容為空，請重試');
 
-    // 解析 JSON（容忍 Claude 偶爾加多餘文字）
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('回應格式異常，請重試');
+    // 用分隔符解析回應（避免 JSON 轉義問題）
+    const htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
+    const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
 
-    let result;
-    try {
-      result = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      // 逐字元修復：處理未轉義的換行符及 HTML 屬性雙引號
-      // 判斷引號是否真的結束字串：往後看下一個非空白字元，若不是 JSON 合法接續符號，代表是 HTML 屬性引號
-      const raw = jsonMatch[0];
-      let fixed = '';
-      let inString = false;
-      let escaped = false;
-      for (let i = 0; i < raw.length; i++) {
-        const ch = raw[i];
-        if (escaped) { fixed += ch; escaped = false; continue; }
-        if (ch === '\\') { escaped = true; fixed += ch; continue; }
-        if (ch === '"') {
-          if (!inString) {
-            inString = true;
-            fixed += ch;
-          } else {
-            // 往後掃第一個非空白字元
-            let j = i + 1;
-            while (j < raw.length && ' \t\r\n'.includes(raw[j])) j++;
-            const next = raw[j];
-            if (!next || ',}]:'.includes(next)) {
-              inString = false; // 合法字串結尾
-              fixed += ch;
-            } else {
-              fixed += '\\"'; // HTML 屬性引號，補轉義
-            }
-          }
-          continue;
-        }
-        if (inString) {
-          if (ch === '\n' || ch === '\r') { fixed += '\\n'; continue; }
-          if (ch === '\t') { fixed += '\\t'; continue; }
-        }
-        fixed += ch;
-      }
-      try {
-        result = JSON.parse(fixed);
-      } catch (e2) {
-        // 最後手段：用正則直接抽出 html 欄位，changes 設為空
-        const htmlOnly = raw.match(/"html"\s*:\s*"([\s\S]+?)"\s*(?:,\s*"changes"|$)/);
-        if (htmlOnly) {
-          const html = htmlOnly[1]
-            .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-            .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          result = { html, changes: [{ type: 'warning', description: '回應格式不完整，changes 資訊已略過，HTML 內容已盡力回復。' }] };
-        } else {
-          throw new Error('無法解析 AI 回應，請縮短輸入後重試。');
-        }
+    if (!htmlMatch) throw new Error('回應格式異常，請重試（AI 未依格式回傳）');
+
+    let changes = [];
+    if (changesMatch) {
+      try { changes = JSON.parse(changesMatch[1].trim()); } catch (e) {
+        changes = [{ type: 'warning', description: '修改報告解析失敗，但 HTML 已修復完成。' }];
       }
     }
+    const result = { html: htmlMatch[1].trim(), changes };
 
     // JS 前端對比度運算精準攔截
     const postProcess = processHTMLContrast(result.html || '', bgColor, level);
