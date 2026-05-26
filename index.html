@@ -866,24 +866,28 @@ async function run() {
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">⚡ AI 生成中，請稍候...</div>';
 
+    function parseSseLine(line) {
+      if (!line.startsWith('data:')) return;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === '[DONE]') return;
+      let evt;
+      try { evt = JSON.parse(raw); } catch (_) { return; }
+      if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+        fullText += evt.delta.text;
+      }
+      if (evt.type === 'error') throw new Error(evt.error?.message || 'API 串流錯誤');
+    }
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       sseBuffer += decoder.decode(value, { stream: true });
       const lines = sseBuffer.split('\n');
       sseBuffer = lines.pop(); // 保留未完整的最後一行
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        const raw = line.slice(5).trim();
-        if (!raw || raw === '[DONE]') continue;
-        let evt;
-        try { evt = JSON.parse(raw); } catch (_) { continue; }
-        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-          fullText += evt.delta.text;
-        }
-        if (evt.type === 'error') throw new Error(evt.error?.message || 'API 串流錯誤');
-      }
+      for (const line of lines) parseSseLine(line);
     }
+    // 處理 loop 結束後 buffer 殘留的最後一行
+    if (sseBuffer.trim()) parseSseLine(sseBuffer);
 
     const text = fullText;
     if (!text) throw new Error('回應內容為空，請重試');
@@ -892,7 +896,9 @@ async function run() {
     const htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
     const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
 
-    if (!htmlMatch) throw new Error('回應格式異常，請重試（AI 未依格式回傳）');
+    if (!htmlMatch) throw new Error(
+      `回應格式異常（AI 未依格式回傳）。\n\n收到的回應開頭：\n${text.slice(0, 400)}`
+    );
 
     let changes = [];
     if (changesMatch) {
