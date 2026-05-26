@@ -716,6 +716,9 @@ function showToast(msg) {
 async function run() {
   const input = document.getElementById('input').value.trim();
   if (!input) { showToast('請先貼上內容'); return; }
+  if (input.length > 20000) {
+    showToast(`⚠️ 內容共 ${input.length.toLocaleString()} 字元，超過建議上限 20,000 字。大型表格可能因 AI 輸出 token 上限而截斷，建議分段貼入。`);
+  }
 
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
@@ -843,7 +846,7 @@ async function run() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: 'user', content: input }]
@@ -893,8 +896,21 @@ async function run() {
     if (!text) throw new Error('回應內容為空，請重試');
 
     // 用分隔符解析回應（避免 JSON 轉義問題）
-    const htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
+    let htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
     const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
+
+    let truncated = false;
+    if (!htmlMatch) {
+      // 容錯：AI 因 token 上限截斷，HTML_END 缺失時取出現有內容
+      const startTag = '===HTML_START===\n';
+      const startIdx = text.indexOf(startTag);
+      if (startIdx !== -1) {
+        const after = text.slice(startIdx + startTag.length);
+        const stopIdx = after.indexOf('\n===CHANGES_START===');
+        const extracted = (stopIdx !== -1 ? after.slice(0, stopIdx) : after).trim();
+        if (extracted) { htmlMatch = ['', extracted]; truncated = true; }
+      }
+    }
 
     if (!htmlMatch) throw new Error(
       `回應格式異常（AI 未依格式回傳）。\n\n收到的回應開頭：\n${text.slice(0, 400)}`
@@ -905,6 +921,9 @@ async function run() {
       try { changes = JSON.parse(changesMatch[1].trim()); } catch (e) {
         changes = [{ type: 'warning', description: '修改報告解析失敗，但 HTML 已修復完成。' }];
       }
+    }
+    if (truncated) {
+      changes.unshift({ type: 'warning', description: '⚠️ 內容過大，AI 輸出已截斷（超過 token 上限）。HTML 可能不完整，建議將內容分為兩段分別貼入處理。' });
     }
     const result = { html: htmlMatch[1].trim(), changes };
 
