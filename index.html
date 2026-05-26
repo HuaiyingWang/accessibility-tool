@@ -716,9 +716,6 @@ function showToast(msg) {
 async function run() {
   const input = document.getElementById('input').value.trim();
   if (!input) { showToast('請先貼上內容'); return; }
-  if (input.length > 8000) {
-    showToast(`⚠️ 內容共 ${input.length.toLocaleString()} 字元，過長可能逾時，建議分段貼入（每次 ≤ 8,000 字元）`);
-  }
 
   const btn = document.getElementById('btn-submit');
   btn.disabled = true;
