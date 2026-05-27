@@ -785,12 +785,13 @@ async function run() {
 ## 第四部分：UI UX Pro Max 視覺美學系統（強制生成，不可省略）
 
 處理流程（必須依序完成）：
-1. 蒐集輸入中所有 <style> 區塊的有效樣式宣告
-2. 依下方規格生成完整的 CSS 變數與選擇器樣式
-3. 將步驟 1 與步驟 2 的樣式合併為一份 <style> 區塊，置於輸出最上方
-4. 移除 HTML 標籤上所有 style="" inline 屬性，改由上方 <style> 選擇器管理
+1. 掃描輸入，列出所有 inline style="" 的樣式值與所在元素
+2. 為每個 inline style 規劃對應的語意化 class 名稱（如 .text-warning、.highlight-cell）
+3. 輸出 ===HTML_START===：HTML 結構內只用 class=""，完全不含 style="" 或 <style> 標籤
+4. 輸出 ===STYLE_START===：彙整輸入原有 <style> 樣式 + 步驟 2 定義的所有 class + 第四部分 CSS 規格，合併為一份 <style> 區塊
 
-無論輸入內容是否含有任何樣式，以下 CSS 規格均為強制輸出項目。
+⚠ 先完成 HTML 輸出後再寫 <style>，確保所有 class 定義都不遺漏。
+無論輸入是否含有任何樣式，以下 CSS 規格均為強制輸出項目。
 
 ### 智慧型色彩變數
 依內容主題生成符合對比標準的 CSS 變數，以 :root {} 包覆（頁面主背景色參考：${bgColor}）：
@@ -832,35 +833,31 @@ async function run() {
 
 ## 第五部分：輸出規範
 
-1. 嚴禁 HTML 標籤內的 inline style 屬性。移除步驟如下（缺一不可）：
-   a. 分析 style="" 中的每條樣式宣告
-   b. 為該元素命名一個語意化 class（如 .text-warning、.highlight-cell、.section-title）
-   c. 在 HTML 標籤上加上 class="[命名的 class]" 取代原 style=""
-   d. 在 <style> 區塊內定義該 class 的樣式規則
-   ⚠ 嚴禁只刪除 style="" 而不建立對應 class — 這會造成樣式完全遺失
-2. <style> 必須是輸出的第一個標籤，置於所有 HTML 結構之前
+1. 嚴禁 HTML 標籤內的 inline style="" 屬性；每個 style="" 必須轉為 class=""，對應的 CSS 規則寫在 ===STYLE_START=== 的 <style> 區塊
+2. <style> 區塊統一輸出至 ===STYLE_START=== 區塊，嚴禁寫在 ===HTML_START=== 的 HTML 結構內
 3. 所有 CSS 宣告必須加上 !important
 4. 選擇器權重需精確計算，避免衝突
 5. 嚴禁輸出任何引用標記（如 [cite] 或 ^1^）
 6. 嚴禁輸出 <!DOCTYPE html>、<html>、<head>、<body> 等文件結構標籤，輸出為 HTML 片段
 
 輸出規則（強制）：
-- 這是片段輸出，不是完整 HTML 文件，嚴禁輸出 <!DOCTYPE>、<html>、<head>、<body> 標籤
-- ===HTML_START=== 後第一個標籤必須是 <style>，絕無例外
-- <style> 區塊必須包含 :root 變數、所有選擇器樣式，不可為空
-- <style> 結束後才接 HTML 結構標籤
+- 這是片段輸出，嚴禁輸出 <!DOCTYPE>、<html>、<head>、<body> 標籤
+- ===HTML_START=== 只放 HTML 結構，不含任何 <style> 標籤或 style="" 屬性
+- ===STYLE_START=== 放 <style> 區塊，必須包含 :root 變數與所有 class 定義，不可為空
 
 請只回傳以下格式，不要加任何其他說明或文字（HTML 直接輸出原始碼，無需跳脫）：
 
 ===HTML_START===
+<!-- 修復後的 HTML 結構（無 inline style，改用 class=""）-->
+===HTML_END===
+===STYLE_START===
 <style>
 :root {
   /* CSS 變數 */
 }
-/* 所有選擇器樣式 */
+/* 上方 HTML 用到的所有 class 定義 */
 </style>
-<!-- 修復後的 HTML 結構（所有 inline style 已移入上方 style 區塊）-->
-===HTML_END===
+===STYLE_END===
 ===CHANGES_START===
 [
   { "type": "clean", "description": "說明清理了什麼" },
@@ -925,6 +922,7 @@ async function run() {
 
     // 用分隔符解析回應（避免 JSON 轉義問題）
     let htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
+    const styleMatch   = text.match(/===STYLE_START===\r?\n([\s\S]*?)\r?\n===STYLE_END===/);
     const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
 
     let truncated = false;
@@ -934,7 +932,7 @@ async function run() {
       const startIdx = text.indexOf(startTag);
       if (startIdx !== -1) {
         const after = text.slice(startIdx + startTag.length);
-        const stopIdx = after.indexOf('\n===CHANGES_START===');
+        const stopIdx = after.indexOf('\n===STYLE_START===');
         const extracted = (stopIdx !== -1 ? after.slice(0, stopIdx) : after).trim();
         if (extracted) { htmlMatch = ['', extracted]; truncated = true; }
       }
@@ -953,7 +951,12 @@ async function run() {
     if (truncated) {
       changes.unshift({ type: 'warning', description: '⚠️ 內容過大，AI 輸出已截斷（超過 token 上限）。HTML 可能不完整，建議將內容分為兩段分別貼入處理。' });
     }
-    const result = { html: htmlMatch[1].trim(), changes };
+
+    // 合併 <style> 區塊（在最上方）+ HTML 結構（在下方）
+    const styleBlock  = styleMatch ? styleMatch[1].trim() : '';
+    const htmlContent = htmlMatch[1].trim();
+    const combined    = styleBlock ? styleBlock + '\n' + htmlContent : htmlContent;
+    const result = { html: combined, changes };
 
     // JS 前端對比度運算精準攔截
     const postProcess = processHTMLContrast(result.html || '', bgColor, level);
