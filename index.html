@@ -712,6 +712,48 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+// ── SSE 串流讀取輔助函式 ──
+async function streamText(body) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    let errBody = {};
+    try { errBody = JSON.parse(errText); } catch (_) {}
+    throw new Error(`伺服器錯誤 ${res.status}：${errBody?.error?.message || errText || `HTTP ${res.status}`}`);
+  }
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let sseBuffer = '';
+  let fullText  = '';
+
+  function parseSseLine(line) {
+    if (!line.startsWith('data:')) return;
+    const raw = line.slice(5).trim();
+    if (!raw || raw === '[DONE]') return;
+    let evt;
+    try { evt = JSON.parse(raw); } catch (_) { return; }
+    if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+      fullText += evt.delta.text;
+    }
+    if (evt.type === 'error') throw new Error(evt.error?.message || 'API 串流錯誤');
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    sseBuffer += decoder.decode(value, { stream: true });
+    const lines = sseBuffer.split('\n');
+    sseBuffer = lines.pop();
+    for (const line of lines) parseSseLine(line);
+  }
+  if (sseBuffer.trim()) parseSseLine(sseBuffer);
+  return fullText;
+}
+
 // ── 主流程 ──
 async function run() {
   const input = document.getElementById('input').value.trim();
@@ -732,14 +774,13 @@ async function run() {
   ['btn-copy','btn-download','btn-reuse'].forEach(id =>
     document.getElementById(id).style.display = 'none');
 
-  const systemPrompt = `你是一位頂尖的前端開發者兼 UI 設計師，精通平衡嚴格的 WCAG 2.2 ${level} 無障礙規範與 UI UX Pro Max 的現代設計美學。
+  // ── CALL 1：修復 HTML 結構，inline style → class ──
+  const systemPromptHTML = `你是一位精通 WCAG 2.2 ${level} 無障礙規範的前端開發者。
 
 ## 核心目標
-將輸入內容轉化為：
 - 符合 WCAG 2.2 ${level} 標準的無障礙結構（${level === 'AAA' ? '對比比例需達 7:1' : '對比比例需達 4.5:1 一般 / 3:1 大字'}）
-- 視覺整潔且易於閱讀的原始碼
-- 從 h3 開始且不跨級的清晰標題層次
-- 所有 CSS 樣式集中於 <style> 區塊，置於輸出最上方
+- 視覺整潔且易於閱讀的原始碼，標題從 h3 開始、嚴格遞增
+- 所有 inline style="" 轉為語意化 class=""，CSS 由後續步驟獨立生成
 
 ---
 
@@ -748,109 +789,42 @@ async function run() {
 移除 Microsoft Word / Google Docs 殘留標籤（mso-*、docs-internal-guid-*、<o:p>、MsoNormal class）。
 清理多餘 <span> 巢套、移除 Comic Sans MS 等不適合閱讀的字體宣告。
 移除僅含空白或 &nbsp; 的空標籤；超過 2 個連續 <br> 只保留 1 個。
-
-【重要】輸入若含有 <style> 區塊：保留其中所有有效的樣式宣告，後續整合至最終輸出的 <style> 區塊。嚴禁刪除 <style> 標籤本身或捨棄其中內容。
-
----
-
-## 第二部分：強制對比度
-
-所有顏色相關 CSS 屬性（color、background-color、border-color）必須全面加上 !important，嚴防外部樣式覆寫。
-互動元件（按鈕、連結）顏色必須達到 WCAG ${level} 對比標準。
-成功範例：白色文字 (#FFFFFF) 搭配深色背景（深石墨、深灰、黑色）。
-嚴禁：深橙色背景搭配灰色文字。
+【重要】輸入若含有 <style> 區塊：保留其中所有有效宣告，記錄 class 名稱供後續使用。
 
 ---
 
-## 第三部分：結構與語意規範
+## 第二部分：結構與語意規範
 
-1. 版面：所有 Wrapper / Container 使用 width: 100% !important;，嚴禁 max-width。
-2. 標題層次：固定從 <h3> 開始，嚴格遞增（h3 → h4 → h5），嚴禁跨級。若原始為粗體 <p> 偽裝的標題，轉換為正確 <hX> 標籤。
-3. 語意標籤：嚴禁用 div/span 模擬互動元件，必須用原生 <button> 或 <a>。
-4. ARIA 標註：為所有有意義的元件添加 role 與 aria-* 屬性（aria-expanded、aria-label 等）。
-5. 超連結：嚴禁裸露 URL；外部或開啟新視窗連結補齊 target="_blank" rel="noopener noreferrer"；下載連結需加 title 與 aria-label 說明。
-6. 圖片：嚴禁修改原始 src 路徑；alt 為空時依內容填補；固定像素寬高改為 max-width: 100%; height: auto;。
-7. 文件下載連結：若頁面含文件下載連結，依以下規則強制補充雙格式無障礙說明：
-   - Word 文件 → 同時提供 DOCX + ODT
-   - Excel 試算表 → 同時提供 XLSX + ODS
-   - PDF（閱讀用，如公告、簡章） → 僅需單一 PDF
-   - PDF（填寫用，如申請書、表單） → 強制提供 PDF + 可編輯格式 (ODT/ODS)
-   每個下載連結必須有獨立且明確的 aria-label 與 title，精確標註該連結的實體檔案格式。
-8. 語意化清單：將手動輸入編號的段落（如 1. 2. 3.）自動轉為 <ol><li>；項目符號轉為 <ul><li>。
-9. 表格與 iframe：<table> 補上 <th scope="col"> 或 <th scope="row"> 與 <caption>；iframe 補上 title。
-10. 內容完整性：必須完整保留所有文字內容與資訊架構，嚴禁刪減或竄改原始文字。
+1. 標題層次：固定從 <h3> 開始，嚴格遞增（h3 → h4 → h5），嚴禁跨級。
+2. 語意標籤：嚴禁用 div/span 模擬互動元件，必須用原生 <button> 或 <a>。
+3. ARIA 標註：為所有有意義的元件添加 role 與 aria-* 屬性（aria-expanded、aria-label 等）。
+4. 超連結：嚴禁裸露 URL；外部連結補齊 target="_blank" rel="noopener noreferrer"；加 aria-label 與 title。
+5. 圖片：嚴禁修改原始 src 路徑；alt 為空時依內容填補；固定像素寬高改為 class（max-width: 100%; height: auto）。
+6. 文件下載連結：Word → DOCX+ODT；Excel → XLSX+ODS；PDF 閱讀 → 單一 PDF；PDF 填寫 → PDF+可編輯格式。
+7. 語意化清單：手動編號段落轉 <ol><li>；項目符號轉 <ul><li>。
+8. 表格與 iframe：<table> 補 <th scope="col/row"> 與 <caption>；iframe 補 title。
+9. 內容完整性：必須完整保留所有文字內容與資訊架構，嚴禁刪減或竄改。
 
 ---
 
-## 第四部分：UI UX Pro Max 視覺美學系統（強制生成，不可省略）
+## 第三部分：inline style 轉換規則
 
-輸出流程（===HTML_START=== 區塊內的順序，嚴格遵守）：
-第一步：輸出完整的 <style> 區塊（:root 變數 + 所有 class 定義）
-第二步：輸出完整的 HTML 結構（所有 inline style="" 已改為 class=""）
-
-⚠ <style> 必須是 ===HTML_START=== 之後的第一個元素，HTML 結構在其後。
-無論輸入是否含有任何樣式，以下 CSS 規格均為強制輸出項目。
-
-### 智慧型色彩變數
-依內容主題生成符合對比標準的 CSS 變數，以 :root {} 包覆（頁面主背景色參考：${bgColor}）：
-- --bg-body：頁面/容器背景，配合主背景色 ${bgColor}
-- --bg-card：卡片背景，略深或略淺於 --bg-body
-- --text-primary：主要文字，需與背景達到 WCAG ${level}
-- --text-secondary：次要文字
-- --color-primary：強調/連結色，強制深色調，確保與白字 (#FFFFFF) 達到 WCAG ${level}
-
-### 卡片化佈局
-內容區塊包裹在卡片容器內，套用：background-color: var(--bg-body) !important; margin-bottom: 24px;
-（不強制圓角，保持保守幾何線條）
-
-### 字體排版
-- 全面禁用 font-weight: bold，改用數值
-- 標題：font-weight: 600; letter-spacing: 0.025em; line-height: 1.6;
-- 內文：font-weight: 400;
-
-### 按鈕元件
-- 主要按鈕：background: var(--color-primary); color: #FFFFFF !important;（確保 WCAG ${level} 對比）
-- 次要按鈕：background: #FFFFFF; color: var(--text-primary) !important; 加深色邊框
-- 選擇器綁定 HTML 標籤提高權重，範例：a.a11y-btn, button.a11y-btn
-- 用排除選擇器隔離一般連結樣式，範例：.a11y-container a:not(.a11y-btn)
-
-### 表格規範
-- 完整語意：<table> <caption> <thead> <tbody> <th scope="col/row"> <td>
-- 版型：table-layout: fixed; width: 100%;
-- 禁用粗體；表頭用高對比背景色塊
-- 多欄複雜表格必須加橫向滑動容器（role="region" aria-label="可橫向滑動查看完整表格" tabindex="0"，overflow-x:auto）
-
-### 清單規範
-- <ul>：list-style-type: disc !important;
-- <ol>：list-style-type: decimal !important;
-- 嚴禁 list-style: none
-- <li>：margin-bottom: 12px !important; padding-left: 8px !important;
-- 清單整體：padding-left: 24px !important;
+- 為每個 inline style 取一個有意義的 class 名稱（如 .img-banner、.label-warning、.link-highlight）
+- 移除 style="" 屬性，改用 class=""
+- 嚴禁在此步驟輸出 <style> 標籤或任何 CSS 規則，CSS 由後續 API 呼叫獨立生成
 
 ---
 
-## 第五部分：輸出規範
+## 輸出規範（嚴格遵守）
 
-1. 嚴禁 HTML 標籤內的 inline style="" 屬性；每個 style="" 必須轉為 class=""，對應的 CSS 規則寫在 <style> 區塊內
-2. <style> 區塊置於 ===HTML_START=== 之後、HTML 結構之前（區塊內第一個元素）
-3. 所有 CSS 宣告必須加上 !important
-4. 選擇器權重需精確計算，避免衝突
-5. 嚴禁輸出任何引用標記（如 [cite] 或 ^1^）
-6. 嚴禁輸出 <!DOCTYPE html>、<html>、<head>、<body> 等文件結構標籤，輸出為 HTML 片段
+- 嚴禁 HTML 標籤內出現 inline style="" 屬性
+- 嚴禁輸出 <style> 標籤（CSS 另行生成）
+- 嚴禁輸出 <!DOCTYPE html>、<html>、<head>、<body> 等文件結構標籤
+- 你的回應第一個字元必須是 ===HTML_START===，禁止在此之前輸出任何文字
 
-輸出規則（強制）：
-- 你的回應第一個字元必須是 ===HTML_START===，禁止在此之前輸出任何文字、說明或解釋
-- ===CHANGES_START=== 只需 1～3 條最重要的修改摘要，每條一句話，無需列舉每個細節
-
-請嚴格依以下格式回傳（HTML 直接輸出原始碼，無需跳脫）：
+請嚴格依以下格式回傳：
 
 ===HTML_START===
-<style>
-:root {
-  /* CSS 變數 */
-}
-/* 所有 class 定義 */
-</style>
 <!-- 修復後的 HTML 結構（無 inline style，改用 class=""）-->
 ===HTML_END===
 ===CHANGES_START===
@@ -861,79 +835,36 @@ async function run() {
 ===CHANGES_END===`;
 
   try {
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `請直接從 ===HTML_START=== 開始輸出，不加任何說明或前言：\n\n${input}` }]
-      })
+    document.getElementById('output').innerHTML =
+      '<div class="streaming-indicator">⚡ 步驟 1/2：修復 HTML 結構...</div>';
+
+    const htmlRawText = await streamText({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 6000,
+      system: systemPromptHTML,
+      messages: [{ role: 'user', content: `請直接從 ===HTML_START=== 開始輸出，不加任何說明或前言：\n\n${input}` }]
     });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      let errBody = {};
-      try { errBody = JSON.parse(errText); } catch (_) {}
-      throw new Error(`伺服器錯誤 ${res.status}：${errBody?.error?.message || errText || `HTTP ${res.status}`}`);
-    }
+    if (!htmlRawText) throw new Error('步驟 1 回應內容為空，請重試');
 
-    // SSE 串流讀取
-    const reader  = res.body.getReader();
-    const decoder = new TextDecoder();
-    let sseBuffer = '';
-    let fullText  = '';
-
-    document.getElementById('output').innerHTML =
-      '<div class="streaming-indicator">⚡ AI 生成中，請稍候...</div>';
-
-    function parseSseLine(line) {
-      if (!line.startsWith('data:')) return;
-      const raw = line.slice(5).trim();
-      if (!raw || raw === '[DONE]') return;
-      let evt;
-      try { evt = JSON.parse(raw); } catch (_) { return; }
-      if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-        fullText += evt.delta.text;
-      }
-      if (evt.type === 'error') throw new Error(evt.error?.message || 'API 串流錯誤');
-    }
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      sseBuffer += decoder.decode(value, { stream: true });
-      const lines = sseBuffer.split('\n');
-      sseBuffer = lines.pop(); // 保留未完整的最後一行
-      for (const line of lines) parseSseLine(line);
-    }
-    // 處理 loop 結束後 buffer 殘留的最後一行
-    if (sseBuffer.trim()) parseSseLine(sseBuffer);
-
-    const text = fullText;
-    if (!text) throw new Error('回應內容為空，請重試');
-
-    // 用分隔符解析回應（避免 JSON 轉義問題）
-    let htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
-    const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
-
+    // 解析 HTML
+    let htmlMatch = htmlRawText.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
     let truncated = false;
     if (!htmlMatch) {
-      // 截斷容錯：HTML_END 缺失時用 regex 取 HTML_START 之後的所有內容
-      const hSepMatch = /===HTML_START===\r?\n/.exec(text);
-      if (hSepMatch) {
-        const after = text.slice(hSepMatch.index + hSepMatch[0].length);
-        const stopIdx = after.search(/\r?\n===CHANGES_START===/);
-        const extracted = (stopIdx !== -1 ? after.slice(0, stopIdx) : after).trim();
+      const hSep = /===HTML_START===\r?\n/.exec(htmlRawText);
+      if (hSep) {
+        const after = htmlRawText.slice(hSep.index + hSep[0].length);
+        const stop  = after.search(/\r?\n===CHANGES_START===/);
+        const extracted = (stop !== -1 ? after.slice(0, stop) : after).trim();
         if (extracted) { htmlMatch = ['', extracted]; truncated = true; }
       }
     }
+    if (!htmlMatch) throw new Error(`步驟 1 格式異常。\n\n回應開頭：\n${htmlRawText.slice(0, 400)}`);
 
-    if (!htmlMatch) throw new Error(
-      `回應格式異常（AI 未依格式回傳）。\n\n收到的回應開頭：\n${text.slice(0, 400)}`
-    );
+    const htmlContent = htmlMatch[1].trim();
 
+    // 解析 CHANGES
+    const changesMatch = htmlRawText.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
     let changes = [];
     if (changesMatch) {
       try { changes = JSON.parse(changesMatch[1].trim()); } catch (e) {
@@ -941,17 +872,45 @@ async function run() {
       }
     }
     if (truncated) {
-      changes.unshift({ type: 'warning', description: '⚠️ 內容過大，AI 輸出已截斷（超過 token 上限）。HTML 可能不完整，建議將內容分為兩段分別貼入處理。' });
+      changes.unshift({ type: 'warning', description: '⚠️ 內容過大，AI 輸出已截斷。HTML 可能不完整，建議分段貼入。' });
     }
 
-    // <style> 已由 AI 直接輸出在 HTML_START 區塊最上方，直接使用
-    const result = { html: htmlMatch[1].trim(), changes };
+    // ── CALL 2：根據 HTML 生成 <style> 區塊 ──
+    const systemPromptCSS = `你是 CSS 專家。根據提供的 HTML 片段，為所有 class 屬性生成完整的 <style> 區塊。
+
+規格要求：
+- :root {} 色彩 CSS 變數（頁面主背景色參考：${bgColor}；所有色彩需符合 WCAG ${level}（${level === 'AAA' ? '7:1' : '4.5:1 一般 / 3:1 大字'}））
+- 為 HTML 中每個 class 定義對應 CSS 規則（必須覆蓋 HTML 中出現的所有 class）
+- 所有 CSS 宣告加上 !important
+- 圖片相關 class：max-width: 100% !important; height: auto !important
+- 清單相關 class：保留 list-style-type（disc/decimal）；padding-left: 24px !important；li margin-bottom: 12px !important
+- 按鈕 / 強調連結 class：深色背景 + #FFFFFF 文字；:hover 略淺；:focus-visible 需有明確 outline
+- 顏色相關 class（如 .label-warning）：確保文字與背景對比達標
+
+直接輸出 <style>...</style>，不加任何說明文字。`;
+
+    document.getElementById('output').innerHTML =
+      '<div class="streaming-indicator">🎨 步驟 2/2：生成樣式...</div>';
+
+    const cssRawText = await streamText({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: systemPromptCSS,
+      messages: [{ role: 'user', content: htmlContent }]
+    });
+
+    // 擷取 <style> 區塊
+    const styleMatchResult = cssRawText.match(/<style[\s\S]*?<\/style>/i);
+    const styleBlock = styleMatchResult ? styleMatchResult[0] : '';
+
+    // 合併輸出（<style> 在最上方）
+    const combined = styleBlock ? styleBlock + '\n' + htmlContent : htmlContent;
 
     // JS 前端對比度運算精準攔截
-    const postProcess = processHTMLContrast(result.html || '', bgColor, level);
+    const postProcess = processHTMLContrast(combined, bgColor, level);
     lastOutput = postProcess.html;
 
-    let finalChanges = result.changes || [];
+    let finalChanges = changes;
     if (postProcess.count > 0) {
       finalChanges.push({
         type: 'fix',
