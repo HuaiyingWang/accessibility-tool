@@ -875,10 +875,7 @@ async function run() {
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,
-        messages: [
-          { role: 'user', content: input },
-          { role: 'assistant', content: '===HTML_START===' }
-        ]
+        messages: [{ role: 'user', content: `請直接從 ===HTML_START=== 開始輸出，不加任何說明或前言：\n\n${input}` }]
       })
     });
 
@@ -893,7 +890,7 @@ async function run() {
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let sseBuffer = '';
-    let fullText  = '===HTML_START==='; // pre-fill 已注入，補回到 fullText
+    let fullText  = '';
 
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">⚡ AI 生成中，請稍候...</div>';
@@ -959,12 +956,11 @@ async function run() {
     // 合併 <style> 區塊（在最上方）+ HTML 結構（在下方）
     let styleBlock = styleMatch ? styleMatch[1].trim() : '';
     if (!styleBlock) {
-      // 截斷容錯：STYLE_END 缺失時取出現有內容
-      const sTag = '===STYLE_START===\n';
-      const sIdx = text.indexOf(sTag);
-      if (sIdx !== -1) {
-        const afterStyle = text.slice(sIdx + sTag.length);
-        const endIdx = afterStyle.indexOf('\n===STYLE_END===');
+      // 截斷容錯：用 regex 同時相容 \n 與 \r\n
+      const sSepMatch = /===STYLE_START===\r?\n/.exec(text);
+      if (sSepMatch) {
+        const afterStyle = text.slice(sSepMatch.index + sSepMatch[0].length);
+        const endIdx = afterStyle.search(/\r?\n===STYLE_END===/);
         const extracted = (endIdx !== -1 ? afterStyle.slice(0, endIdx) : afterStyle).trim();
         if (extracted) styleBlock = extracted;
       }
