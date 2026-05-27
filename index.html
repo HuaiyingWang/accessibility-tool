@@ -784,13 +784,11 @@ async function run() {
 
 ## 第四部分：UI UX Pro Max 視覺美學系統（強制生成，不可省略）
 
-處理流程（必須依序完成）：
-1. 掃描輸入，列出所有 inline style="" 的樣式值與所在元素
-2. 為每個 inline style 規劃對應的語意化 class 名稱（如 .text-warning、.highlight-cell）
-3. 輸出 ===HTML_START===：HTML 結構內只用 class=""，完全不含 style="" 或 <style> 標籤
-4. 輸出 ===STYLE_START===：彙整輸入原有 <style> 樣式 + 步驟 2 定義的所有 class + 第四部分 CSS 規格，合併為一份 <style> 區塊
+輸出流程（===HTML_START=== 區塊內的順序，嚴格遵守）：
+第一步：輸出完整的 <style> 區塊（:root 變數 + 所有 class 定義）
+第二步：輸出完整的 HTML 結構（所有 inline style="" 已改為 class=""）
 
-⚠ 先完成 HTML 輸出後再寫 <style>，確保所有 class 定義都不遺漏。
+⚠ <style> 必須是 ===HTML_START=== 之後的第一個元素，HTML 結構在其後。
 無論輸入是否含有任何樣式，以下 CSS 規格均為強制輸出項目。
 
 ### 智慧型色彩變數
@@ -833,8 +831,8 @@ async function run() {
 
 ## 第五部分：輸出規範
 
-1. 嚴禁 HTML 標籤內的 inline style="" 屬性；每個 style="" 必須轉為 class=""，對應的 CSS 規則寫在 ===STYLE_START=== 的 <style> 區塊
-2. <style> 區塊統一輸出至 ===STYLE_START=== 區塊，嚴禁寫在 ===HTML_START=== 的 HTML 結構內
+1. 嚴禁 HTML 標籤內的 inline style="" 屬性；每個 style="" 必須轉為 class=""，對應的 CSS 規則寫在 <style> 區塊內
+2. <style> 區塊置於 ===HTML_START=== 之後、HTML 結構之前（區塊內第一個元素）
 3. 所有 CSS 宣告必須加上 !important
 4. 選擇器權重需精確計算，避免衝突
 5. 嚴禁輸出任何引用標記（如 [cite] 或 ^1^）
@@ -842,24 +840,19 @@ async function run() {
 
 輸出規則（強制）：
 - 你的回應第一個字元必須是 ===HTML_START===，禁止在此之前輸出任何文字、說明或解釋
-- 這是片段輸出，嚴禁輸出 <!DOCTYPE>、<html>、<head>、<body> 標籤
-- ===HTML_START=== 只放 HTML 結構，不含任何 <style> 標籤或 style="" 屬性
-- ===STYLE_START=== 放 <style> 區塊，必須包含 :root 變數與所有 class 定義，不可為空
 - ===CHANGES_START=== 只需 1～3 條最重要的修改摘要，每條一句話，無需列舉每個細節
 
 請嚴格依以下格式回傳（HTML 直接輸出原始碼，無需跳脫）：
 
 ===HTML_START===
-<!-- 修復後的 HTML 結構（無 inline style，改用 class=""）-->
-===HTML_END===
-===STYLE_START===
 <style>
 :root {
   /* CSS 變數 */
 }
-/* 上方 HTML 用到的所有 class 定義 */
+/* 所有 class 定義 */
 </style>
-===STYLE_END===
+<!-- 修復後的 HTML 結構（無 inline style，改用 class=""）-->
+===HTML_END===
 ===CHANGES_START===
 [
   { "type": "clean", "description": "簡短說明清理項目" },
@@ -923,17 +916,15 @@ async function run() {
 
     // 用分隔符解析回應（避免 JSON 轉義問題）
     let htmlMatch    = text.match(/===HTML_START===\r?\n([\s\S]*?)\r?\n===HTML_END===/);
-    const styleMatch   = text.match(/===STYLE_START===\r?\n([\s\S]*?)\r?\n===STYLE_END===/);
     const changesMatch = text.match(/===CHANGES_START===\r?\n([\s\S]*?)\r?\n===CHANGES_END===/);
 
     let truncated = false;
     if (!htmlMatch) {
-      // 容錯：AI 因 token 上限截斷，HTML_END 缺失時取出現有內容
-      const startTag = '===HTML_START===\n';
-      const startIdx = text.indexOf(startTag);
-      if (startIdx !== -1) {
-        const after = text.slice(startIdx + startTag.length);
-        const stopIdx = after.indexOf('\n===STYLE_START===');
+      // 截斷容錯：HTML_END 缺失時用 regex 取 HTML_START 之後的所有內容
+      const hSepMatch = /===HTML_START===\r?\n/.exec(text);
+      if (hSepMatch) {
+        const after = text.slice(hSepMatch.index + hSepMatch[0].length);
+        const stopIdx = after.search(/\r?\n===CHANGES_START===/);
         const extracted = (stopIdx !== -1 ? after.slice(0, stopIdx) : after).trim();
         if (extracted) { htmlMatch = ['', extracted]; truncated = true; }
       }
@@ -953,21 +944,8 @@ async function run() {
       changes.unshift({ type: 'warning', description: '⚠️ 內容過大，AI 輸出已截斷（超過 token 上限）。HTML 可能不完整，建議將內容分為兩段分別貼入處理。' });
     }
 
-    // 合併 <style> 區塊（在最上方）+ HTML 結構（在下方）
-    let styleBlock = styleMatch ? styleMatch[1].trim() : '';
-    if (!styleBlock) {
-      // 截斷容錯：用 regex 同時相容 \n 與 \r\n
-      const sSepMatch = /===STYLE_START===\r?\n/.exec(text);
-      if (sSepMatch) {
-        const afterStyle = text.slice(sSepMatch.index + sSepMatch[0].length);
-        const endIdx = afterStyle.search(/\r?\n===STYLE_END===/);
-        const extracted = (endIdx !== -1 ? afterStyle.slice(0, endIdx) : afterStyle).trim();
-        if (extracted) styleBlock = extracted;
-      }
-    }
-    const htmlContent = htmlMatch[1].trim();
-    const combined    = styleBlock ? styleBlock + '\n' + htmlContent : htmlContent;
-    const result = { html: combined, changes };
+    // <style> 已由 AI 直接輸出在 HTML_START 區塊最上方，直接使用
+    const result = { html: htmlMatch[1].trim(), changes };
 
     // JS 前端對比度運算精準攔截
     const postProcess = processHTMLContrast(result.html || '', bgColor, level);
