@@ -914,20 +914,20 @@ CSS 規格：
     if (cssContent) {
       const styleTagMatch = cssContent.match(/<style[\s\S]*?<\/style>/i);
       if (styleTagMatch) {
-        styleBlock = styleTagMatch[0];
+        styleBlock = styleTagMatch[0];                         // 完整 <style>...</style>
+      } else if (/<style/i.test(cssContent)) {
+        styleBlock = cssContent + '\n</style>';                // 有 <style> 但截斷，補結尾
       } else {
-        styleBlock = '<style>\n' + cssContent + '\n</style>';
+        styleBlock = '<style>\n' + cssContent + '\n</style>'; // 純 CSS，包標籤
       }
     } else {
-      changes.push({ type: 'warning', description: `⚠️ 步驟 2 樣式生成回應為空（${cssRawText.length} 字元），請開啟 DevTools Console 查看診斷訊息。` });
+      changes.push({ type: 'warning', description: `⚠️ 步驟 2 樣式生成回應為空，請重試。` });
     }
 
-    // 合併輸出（<style> 在最上方）
-    const combined = styleBlock ? styleBlock + '\n' + htmlContent : htmlContent;
-
-    // JS 前端對比度運算精準攔截
-    const postProcess = processHTMLContrast(combined, bgColor, level);
-    lastOutput = postProcess.html;
+    // processHTMLContrast 使用 DOMParser，會把 <style> 移到 <head>
+    // 因此只傳入 htmlContent，最後手動加回 styleBlock
+    const postProcess = processHTMLContrast(htmlContent, bgColor, level);
+    lastOutput = (styleBlock ? styleBlock + '\n' : '') + postProcess.html;
 
     let finalChanges = changes;
     if (postProcess.count > 0) {
