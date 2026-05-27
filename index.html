@@ -875,7 +875,10 @@ async function run() {
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,
-        messages: [{ role: 'user', content: input }]
+        messages: [
+          { role: 'user', content: input },
+          { role: 'assistant', content: '===HTML_START===\n' }
+        ]
       })
     });
 
@@ -890,7 +893,7 @@ async function run() {
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let sseBuffer = '';
-    let fullText  = '';
+    let fullText  = '===HTML_START===\n'; // pre-fill 已注入，補回到 fullText
 
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">⚡ AI 生成中，請稍候...</div>';
