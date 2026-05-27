@@ -841,11 +841,13 @@ async function run() {
 6. 嚴禁輸出 <!DOCTYPE html>、<html>、<head>、<body> 等文件結構標籤，輸出為 HTML 片段
 
 輸出規則（強制）：
+- 你的回應第一個字元必須是 ===HTML_START===，禁止在此之前輸出任何文字、說明或解釋
 - 這是片段輸出，嚴禁輸出 <!DOCTYPE>、<html>、<head>、<body> 標籤
 - ===HTML_START=== 只放 HTML 結構，不含任何 <style> 標籤或 style="" 屬性
 - ===STYLE_START=== 放 <style> 區塊，必須包含 :root 變數與所有 class 定義，不可為空
+- ===CHANGES_START=== 只需 1～3 條最重要的修改摘要，每條一句話，無需列舉每個細節
 
-請只回傳以下格式，不要加任何其他說明或文字（HTML 直接輸出原始碼，無需跳脫）：
+請嚴格依以下格式回傳（HTML 直接輸出原始碼，無需跳脫）：
 
 ===HTML_START===
 <!-- 修復後的 HTML 結構（無 inline style，改用 class=""）-->
@@ -860,9 +862,8 @@ async function run() {
 ===STYLE_END===
 ===CHANGES_START===
 [
-  { "type": "clean", "description": "說明清理了什麼" },
-  { "type": "fix",   "description": "說明修復了什麼", "wcag": "WCAG 條款編號" },
-  { "type": "warning", "description": "需人工確認的項目" }
+  { "type": "clean", "description": "簡短說明清理項目" },
+  { "type": "fix",   "description": "簡短說明修復項目", "wcag": "條款編號" }
 ]
 ===CHANGES_END===`;
 
@@ -953,7 +954,18 @@ async function run() {
     }
 
     // 合併 <style> 區塊（在最上方）+ HTML 結構（在下方）
-    const styleBlock  = styleMatch ? styleMatch[1].trim() : '';
+    let styleBlock = styleMatch ? styleMatch[1].trim() : '';
+    if (!styleBlock) {
+      // 截斷容錯：STYLE_END 缺失時取出現有內容
+      const sTag = '===STYLE_START===\n';
+      const sIdx = text.indexOf(sTag);
+      if (sIdx !== -1) {
+        const afterStyle = text.slice(sIdx + sTag.length);
+        const endIdx = afterStyle.indexOf('\n===STYLE_END===');
+        const extracted = (endIdx !== -1 ? afterStyle.slice(0, endIdx) : afterStyle).trim();
+        if (extracted) styleBlock = extracted;
+      }
+    }
     const htmlContent = htmlMatch[1].trim();
     const combined    = styleBlock ? styleBlock + '\n' + htmlContent : htmlContent;
     const result = { html: combined, changes };
