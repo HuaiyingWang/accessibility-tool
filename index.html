@@ -832,7 +832,12 @@ async function run() {
 
 ## 第五部分：輸出規範
 
-1. 嚴禁 HTML 標籤內的 inline style，所有樣式統一移入 <style> 區塊
+1. 嚴禁 HTML 標籤內的 inline style 屬性。移除步驟如下（缺一不可）：
+   a. 分析 style="" 中的每條樣式宣告
+   b. 為該元素命名一個語意化 class（如 .text-warning、.highlight-cell、.section-title）
+   c. 在 HTML 標籤上加上 class="[命名的 class]" 取代原 style=""
+   d. 在 <style> 區塊內定義該 class 的樣式規則
+   ⚠ 嚴禁只刪除 style="" 而不建立對應 class — 這會造成樣式完全遺失
 2. <style> 必須是輸出的第一個標籤，置於所有 HTML 結構之前
 3. 所有 CSS 宣告必須加上 !important
 4. 選擇器權重需精確計算，避免衝突
