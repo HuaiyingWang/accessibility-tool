@@ -823,15 +823,28 @@ async function run() {
 ## 第五部分：輸出規範
 
 1. 嚴禁 HTML 標籤內的 inline style，所有樣式統一移入 <style> 區塊
-2. <style> 置於輸出 HTML 最上方
+2. <style> 必須是輸出的第一個標籤，置於所有 HTML 結構之前
 3. 所有 CSS 宣告必須加上 !important
 4. 選擇器權重需精確計算，避免衝突
 5. 嚴禁輸出任何引用標記（如 [cite] 或 ^1^）
+6. 嚴禁輸出 <!DOCTYPE html>、<html>、<head>、<body> 等文件結構標籤，輸出為 HTML 片段
+
+輸出規則（強制）：
+- 這是片段輸出，不是完整 HTML 文件，嚴禁輸出 <!DOCTYPE>、<html>、<head>、<body> 標籤
+- ===HTML_START=== 後第一個標籤必須是 <style>，絕無例外
+- <style> 區塊必須包含 :root 變數、所有選擇器樣式，不可為空
+- <style> 結束後才接 HTML 結構標籤
 
 請只回傳以下格式，不要加任何其他說明或文字（HTML 直接輸出原始碼，無需跳脫）：
 
 ===HTML_START===
-（修復後的完整 HTML 原始碼，<style> 區塊置於最上方）
+<style>
+:root {
+  /* CSS 變數 */
+}
+/* 所有選擇器樣式 */
+</style>
+<!-- 修復後的 HTML 結構（所有 inline style 已移入上方 style 區塊）-->
 ===HTML_END===
 ===CHANGES_START===
 [
