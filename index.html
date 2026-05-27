@@ -902,8 +902,11 @@ CSS 規格：
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPromptCSS,
-      messages: [{ role: 'user', content: htmlContent }]
+      messages: [{ role: 'user', content: `請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}` }]
     });
+
+    // 診斷 log（可從 DevTools Console 查看）
+    console.log('[CSS Call2] length:', cssRawText.length, '\npreview:', cssRawText.slice(0, 300));
 
     // 擷取 <style> 區塊（相容 AI 有無包 <style> 標籤兩種情況）
     let styleBlock = '';
@@ -913,9 +916,10 @@ CSS 規格：
       if (styleTagMatch) {
         styleBlock = styleTagMatch[0];
       } else {
-        // AI 輸出了 CSS 但沒有 <style> 標籤，自動補上
         styleBlock = '<style>\n' + cssContent + '\n</style>';
       }
+    } else {
+      changes.push({ type: 'warning', description: `⚠️ 步驟 2 樣式生成回應為空（${cssRawText.length} 字元），請開啟 DevTools Console 查看診斷訊息。` });
     }
 
     // 合併輸出（<style> 在最上方）
