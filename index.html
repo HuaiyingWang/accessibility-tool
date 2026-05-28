@@ -809,8 +809,9 @@ async function run() {
 
 ## 第三部分：inline style 轉換規則
 
-- 為每個 inline style 取一個有意義的 class 名稱（如 .img-banner、.label-warning、.link-highlight）
-- 移除 style="" 屬性，改用 class=""
+- 為每個 inline style 取一個有意義的 class 名稱
+- 【強制】所有 class 名稱必須以 a11y- 開頭（如 a11y-img-banner、a11y-label-warning、a11y-link-highlight），避免與頁面全域 CSS 衝突
+- 移除 style="" 屬性，改用 class="a11y-xxx"
 - 嚴禁在此步驟輸出 <style> 標籤或任何 CSS 規則，CSS 由後續 API 呼叫獨立生成
 
 ---
@@ -882,18 +883,20 @@ async function run() {
 
 輸出範例格式：
 <style>
-:root { --color-primary: #1a3c5e; }
-.img-banner { max-width: 100% !important; height: auto !important; }
+:root { --a11y-color-primary: #1a3c5e; }
+.a11y-img-banner { max-width: 100% !important; height: auto !important; }
+.a11y-label-warning { color: #7a0000 !important; font-weight: 600 !important; }
 </style>
 
 CSS 規格：
-- :root {} 色彩 CSS 變數（頁面主背景色參考：${bgColor}；所有色彩需符合 WCAG ${level}（${level === 'AAA' ? '7:1' : '4.5:1 一般 / 3:1 大字'}））
-- 為 HTML 中每個 class 定義對應 CSS 規則（必須覆蓋 HTML 中出現的所有 class）
-- 所有 CSS 宣告加上 !important
+- :root {} 色彩 CSS 變數，變數名稱以 --a11y- 開頭（如 --a11y-color-primary），避免與全域 CSS 變數衝突
+- 頁面主背景色參考：${bgColor}；所有色彩需符合 WCAG ${level}（${level === 'AAA' ? '7:1' : '4.5:1 一般 / 3:1 大字'}）
+- 為 HTML 中每個 class 定義對應 CSS 規則（class 名稱均以 a11y- 開頭，請原封不動使用）
+- 所有 CSS 宣告加上 !important，防止被全域樣式覆蓋
 - 圖片相關 class：max-width: 100% !important; height: auto !important
 - 清單相關 class：保留 list-style-type（disc/decimal）；padding-left: 24px !important；li margin-bottom: 12px !important
 - 按鈕 / 強調連結 class：深色背景 + #FFFFFF 文字；:hover 略淺；:focus-visible 需有明確 outline
-- 顏色相關 class（如 .label-highlight-red）：確保文字與背景對比達標`;
+- 顏色相關 class（如 .a11y-label-warning）：確保文字與背景對比達標`;
 
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">🎨 步驟 2/2：生成樣式...</div>';
