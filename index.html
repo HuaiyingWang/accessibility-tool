@@ -902,31 +902,43 @@ class 命名原則：
 CSS 規格：
 【零對應原則】只為 HTML 中實際存在的 class 屬性生成 CSS 規則，不生成 HTML 中不存在的 class。
 【變數使用規則】在 :root {} 中定義的每個 CSS 變數，必須在下方至少一條規則中以 var(--a11y-xxx) 引用；不允許定義用不到的孤立變數。
+【元素語意對應規則】CSS 行為必須符合 HTML 元素本身的語意：
+  - <p>、<div>、<span>、<li>、<td>、<figure>、<h3>~<h5> 等「非互動元素」→ 嚴禁設定 cursor: pointer、:hover 改變外觀、:focus-visible，這些元素無法被鍵盤聚焦也不可點擊
+  - <a>、<button>、<input>、<select> 等「互動元素」→ 必須有 :hover 與 :focus-visible 樣式
+  - 使用者傳入的 class 清單已標示元素類型，請依標示決定樣式行為
 - 色彩值一律提取到 :root {} 的 --a11y- 變數，CSS 規則中用 var(--a11y-xxx) 引用，不寫死色值
 - 頁面主背景色參考：${bgColor}；所有色彩需符合 WCAG ${level}（${level === 'AAA' ? '7:1' : '4.5:1 一般 / 3:1 大字'}）
 - 所有 CSS 宣告加上 !important，防止被全域樣式覆蓋
 - 圖片相關 class：max-width: 100% !important; height: auto !important; display: block !important
 - 標題相關 class（a11y-heading-*）：保留原始字體大小與顏色，確保對比達標
 - 清單相關 class：保留 list-style-type（disc/decimal）；padding-left: 24px !important；li margin-bottom: 12px !important
-- 按鈕 / 強調連結 class：深色背景 + #FFFFFF 文字；:hover 略淺；:focus-visible 需有明確 outline
 - 顏色相關 class（如 .a11y-label-warning）：確保文字與背景對比達標`;
 
-    // 從 Call 1 的 HTML 中提取所有實際使用的 a11y- class 名稱
-    const usedClasses = [...new Set(
-      [...htmlContent.matchAll(/class="([^"]*)"/g)]
-        .flatMap(m => m[1].split(/\s+/))
-        .filter(c => c.startsWith('a11y-'))
-    )];
+    // 從 Call 1 的 HTML 中提取所有實際使用的 a11y- class，並記錄元素類型
+    const classTagMap = new Map(); // cls → tag (first occurrence)
+    for (const match of htmlContent.matchAll(/<(\w+)[^>]*\bclass="([^"]*)"/g)) {
+      const tag = match[1].toLowerCase();
+      for (const cls of match[2].split(/\s+/).filter(c => c.startsWith('a11y-'))) {
+        if (!classTagMap.has(cls)) classTagMap.set(cls, tag);
+      }
+    }
 
-    if (usedClasses.length === 0) {
+    if (classTagMap.size === 0) {
       changes.push({ type: 'warning', description: '⚠️ 步驟 1 未產生任何 a11y- class，樣式將無法套用。建議確認輸入內容含有 inline style。' });
     }
 
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">🎨 步驟 2/2：生成樣式...</div>';
 
-    const cssUserMsg = usedClasses.length > 0
-      ? `HTML 中實際使用的 class 清單（只為這些 class 生成 CSS，名稱請原封不動複製，不可新增或刪減）：\n${usedClasses.map(c => `- .${c}`).join('\n')}\n\n請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}`
+    // 互動元素集合，用於判斷是否應有 hover/focus 樣式
+    const interactiveTags = new Set(['a', 'button', 'input', 'select', 'textarea']);
+    const classListLines = [...classTagMap.entries()].map(([cls, tag]) => {
+      const isInteractive = interactiveTags.has(tag);
+      return `- ${tag}.${cls}${isInteractive ? '' : '（非互動元素，不加 cursor/hover/focus 樣式）'}`;
+    });
+
+    const cssUserMsg = classTagMap.size > 0
+      ? `HTML 中實際使用的 class 清單（只為這些 class 生成 CSS，class 名稱與 HTML 元素類型如下，請嚴格依元素類型決定樣式行為）：\n${classListLines.join('\n')}\n\n請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}`
       : `請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}`;
 
     const cssRawText = await streamText({
