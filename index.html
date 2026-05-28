@@ -799,20 +799,31 @@ async function run() {
 2. 語意標籤：嚴禁用 div/span 模擬互動元件，必須用原生 <button> 或 <a>。
 3. ARIA 標註：為所有有意義的元件添加 role 與 aria-* 屬性（aria-expanded、aria-label 等）。
 4. 超連結：嚴禁裸露 URL；外部連結補齊 target="_blank" rel="noopener noreferrer"；加 aria-label 與 title。
-5. 圖片：嚴禁修改原始 src 路徑；alt 為空時依內容填補；固定像素寬高改為 class（max-width: 100%; height: auto）。
+5. 圖片：嚴禁修改原始 src 路徑；alt 為空時依內容填補；固定像素寬高改為 class（max-width: 100%; height: auto）；裸露 <img> 用 <figure> 包裹。
 6. 文件下載連結：Word → DOCX+ODT；Excel → XLSX+ODS；PDF 閱讀 → 單一 PDF；PDF 填寫 → PDF+可編輯格式。
 7. 語意化清單：手動編號段落轉 <ol><li>；項目符號轉 <ul><li>。
 8. 表格與 iframe：<table> 補 <th scope="col/row"> 與 <caption>；iframe 補 title。
 9. 內容完整性：必須完整保留所有文字內容與資訊架構，嚴禁刪減或竄改。
+10. 語意元素轉換（span/div → 語意標籤）：
+    - style 含 font-weight: bold/700/800/900 的 <span>/<div> → 改寫為 <strong class="a11y-xxx">
+    - style 含 font-style: italic 的 <span>/<div> → 改寫為 <em class="a11y-xxx">
+    - style 含 color/background-color/highlight 視覺強調的 <span>/<div> → 改寫為 <mark class="a11y-xxx"> 或 <strong class="a11y-xxx">
 
 ---
 
-## 第三部分：inline style 轉換規則
+## 第三部分：inline style 轉換規則（零例外原則）
 
-- 為每個 inline style 取一個有意義的 class 名稱
-- 【強制】所有 class 名稱必須以 a11y- 開頭（如 a11y-img-banner、a11y-label-warning、a11y-link-highlight），避免與頁面全域 CSS 衝突
-- 移除 style="" 屬性，改用 class="a11y-xxx"
-- 嚴禁在此步驟輸出 <style> 標籤或任何 CSS 規則，CSS 由後續 API 呼叫獨立生成
+【零例外】輸入 HTML 中每一個含有 style="" 屬性的元素，無論是 h3、h4、p、span、div、li、td 等任何標籤，都必須：
+  1. 移除 style="" 屬性
+  2. 同時加上以 a11y- 開頭的 class（如 a11y-heading-main、a11y-text-accent、a11y-img-banner）
+  3. 嚴禁只刪除 style="" 而不添加對應 class，這樣會導致樣式完全消失
+
+class 命名原則：
+- 所有 class 名稱必須以 a11y- 開頭，避免與頁面全域 CSS 衝突
+- 以語意命名，不用視覺命名（用 a11y-label-warning 不用 a11y-text-red）
+- 範例：a11y-heading-main、a11y-heading-sub、a11y-img-banner、a11y-label-warning、a11y-link-highlight、a11y-text-accent
+
+嚴禁在此步驟輸出 <style> 標籤或任何 CSS 規則，CSS 由後續 API 呼叫獨立生成
 
 ---
 
@@ -881,35 +892,49 @@ async function run() {
 
 【格式規定】你的回應第一個字元必須是 <style>，最後必須是 </style>，不加任何說明文字、不加 markdown code block。
 
-輸出範例格式：
+輸出範例格式（:root 變數必須在 CSS 規則中被實際引用）：
 <style>
-:root { --a11y-color-primary: #1a3c5e; }
-.a11y-img-banner { max-width: 100% !important; height: auto !important; }
-.a11y-label-warning { color: #7a0000 !important; font-weight: 600 !important; }
+:root { --a11y-color-accent: #7a0000; }
+.a11y-img-banner { max-width: 100% !important; height: auto !important; display: block !important; }
+.a11y-label-warning { color: var(--a11y-color-accent) !important; font-weight: 700 !important; }
 </style>
 
 CSS 規格：
-- :root {} 色彩 CSS 變數，變數名稱以 --a11y- 開頭（如 --a11y-color-primary），避免與全域 CSS 變數衝突
+【零對應原則】只為 HTML 中實際存在的 class 屬性生成 CSS 規則，不生成 HTML 中不存在的 class。
+【變數使用規則】在 :root {} 中定義的每個 CSS 變數，必須在下方至少一條規則中以 var(--a11y-xxx) 引用；不允許定義用不到的孤立變數。
+- 色彩值一律提取到 :root {} 的 --a11y- 變數，CSS 規則中用 var(--a11y-xxx) 引用，不寫死色值
 - 頁面主背景色參考：${bgColor}；所有色彩需符合 WCAG ${level}（${level === 'AAA' ? '7:1' : '4.5:1 一般 / 3:1 大字'}）
-- 為 HTML 中每個 class 定義對應 CSS 規則（class 名稱均以 a11y- 開頭，請原封不動使用）
 - 所有 CSS 宣告加上 !important，防止被全域樣式覆蓋
-- 圖片相關 class：max-width: 100% !important; height: auto !important
+- 圖片相關 class：max-width: 100% !important; height: auto !important; display: block !important
+- 標題相關 class（a11y-heading-*）：保留原始字體大小與顏色，確保對比達標
 - 清單相關 class：保留 list-style-type（disc/decimal）；padding-left: 24px !important；li margin-bottom: 12px !important
 - 按鈕 / 強調連結 class：深色背景 + #FFFFFF 文字；:hover 略淺；:focus-visible 需有明確 outline
 - 顏色相關 class（如 .a11y-label-warning）：確保文字與背景對比達標`;
 
+    // 從 Call 1 的 HTML 中提取所有實際使用的 a11y- class 名稱
+    const usedClasses = [...new Set(
+      [...htmlContent.matchAll(/class="([^"]*)"/g)]
+        .flatMap(m => m[1].split(/\s+/))
+        .filter(c => c.startsWith('a11y-'))
+    )];
+
+    if (usedClasses.length === 0) {
+      changes.push({ type: 'warning', description: '⚠️ 步驟 1 未產生任何 a11y- class，樣式將無法套用。建議確認輸入內容含有 inline style。' });
+    }
+
     document.getElementById('output').innerHTML =
       '<div class="streaming-indicator">🎨 步驟 2/2：生成樣式...</div>';
+
+    const cssUserMsg = usedClasses.length > 0
+      ? `HTML 中實際使用的 class 清單（只為這些 class 生成 CSS，名稱請原封不動複製，不可新增或刪減）：\n${usedClasses.map(c => `- .${c}`).join('\n')}\n\n請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}`
+      : `請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}`;
 
     const cssRawText = await streamText({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPromptCSS,
-      messages: [{ role: 'user', content: `請直接從 <style> 開始輸出 CSS，最後以 </style> 結束，不加任何說明：\n\n${htmlContent}` }]
+      messages: [{ role: 'user', content: cssUserMsg }]
     });
-
-    // 診斷 log（可從 DevTools Console 查看）
-    console.log('[CSS Call2] length:', cssRawText.length, '\npreview:', cssRawText.slice(0, 300));
 
     // 擷取 <style> 區塊（相容 AI 有無包 <style> 標籤兩種情況）
     let styleBlock = '';
